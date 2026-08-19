@@ -86,11 +86,39 @@ describe("release workflow", () => {
     expect(workflow).toContain("--notes-file release-assets/RELEASE_NOTES.md");
     expect(workflow).not.toMatch(/uses:\s+[^\s]+@v\d+/);
     for (const sha of [
-      "11d5960a326750d5838078e36cf38b85af677262",
-      "49933ea5288caeca8642d1e84afbd3f7d6820020",
+      "3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "820762786026740c76f36085b0efc47a31fe5020",
       "ea165f8d65b6e75b540449e92b4886f43607fa02",
       "d3f86a106a0bac45b974a628896c90dbdf5c8093",
     ]) expect(workflow).toContain(sha);
+    expect(workflow).not.toContain("11d5960a326750d5838078e36cf38b85af677262");
+    expect(workflow).not.toContain("49933ea5288caeca8642d1e84afbd3f7d6820020");
+  });
+
+  it("restores the remote annotated tag object after checkout before building the release", () => {
+    const workflow = readFileSync(".github/workflows/release.yml", "utf8");
+
+    const checkout = workflow.indexOf("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
+    const restoreTag = workflow.indexOf("- name: Restore annotated release tag object");
+    const buildArtifact = workflow.indexOf("- name: Build release artifact");
+    expect(restoreTag).toBeGreaterThan(checkout);
+    expect(restoreTag).toBeLessThan(buildArtifact);
+    expect(workflow).toContain(
+      'git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"',
+    );
+  });
+
+  it("uses the pinned Playwright image for browser-facing release verification", () => {
+    const workflow = readFileSync(".github/workflows/release.yml", "utf8");
+    const verifyJob = workflow.split("  verify:")[1].split("  publish-npm:")[0];
+    const publishedJob = workflow.split("  verify-published:")[1].split("  publish-github-release:")[0];
+    const image = "mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07";
+
+    for (const job of [verifyJob, publishedJob]) {
+      expect(job).toContain(`image: ${image}`);
+      expect(job).toContain("options: --ipc=host --user pwuser");
+      expect(job).not.toContain("playwright install");
+    }
   });
 
   it("documents the fresh-repository and exact first-tag cutover prerequisite", () => {
