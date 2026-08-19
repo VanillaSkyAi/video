@@ -1,0 +1,53 @@
+name: Retire legacy npm package
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RETIRE to remove or deprecate @vanillaskyai/sdk
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  retire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Retire @vanillaskyai/sdk
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+          NPM_BOOTSTRAP_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = "RETIRE"
+          test -n "$NPM_BOOTSTRAP_TOKEN"
+
+          if npm unpublish @vanillaskyai/sdk --force; then
+            if npm view @vanillaskyai/sdk name >/dev/null 2>&1; then
+              echo "The legacy package is still visible after npm reported a successful unpublish." >&2
+              exit 1
+            fi
+            echo "The legacy package was unpublished."
+          else
+            echo "npm refused full deletion; deprecating every legacy version instead."
+            npm deprecate '@vanillaskyai/sdk@*' 'Package renamed to @vanillaskyai/video. Install @vanillaskyai/video instead.'
+            metadata=$(npm view @vanillaskyai/sdk name version deprecated --json)
+            printf '%s' "$metadata" | node --input-type=module -e '
+              const chunks = [];
+              for await (const chunk of process.stdin) chunks.push(chunk);
+              const metadata = JSON.parse(Buffer.concat(chunks).toString());
+              if (metadata.name !== "@vanillaskyai/sdk") throw new Error("Unexpected package metadata");
+              if (!String(metadata.deprecated ?? "").includes("@vanillaskyai/video")) {
+                throw new Error("The legacy package was not deprecated with the replacement name");
+              }
+            '
+            echo "Every legacy version now points to @vanillaskyai/video."
+          fi
