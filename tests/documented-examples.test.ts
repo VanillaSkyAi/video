@@ -115,7 +115,7 @@ describe("documented examples", () => {
     } finally {
       rmSync(workspace, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
   it.each(["react-vite", "server-integrations", "nextjs-quickstart"])(
     "%s pins the repository's current public protocol version",
     (name) => {

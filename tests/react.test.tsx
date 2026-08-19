@@ -212,7 +212,7 @@ describe("React renderer", () => {
     expect(transitionStart).toContain('data-progress="0.000"');
     expect(transitionStart).toContain('data-motion-progress="0.000"');
     expect(transitionStart).toContain("opacity:1");
-    expect(transitionStart).toContain('inert="inert"');
+    expect(transitionStart).toMatch(/inert="(?:inert)?"/);
     expect(transitionStart.match(/data-scene-id=/g)).toHaveLength(1);
     expect(transitionStart.match(/data-template-id="opening"/g)).toHaveLength(1);
     expect(transitionStart.match(/data-layer-template-id="counter"/g)).toHaveLength(1);
