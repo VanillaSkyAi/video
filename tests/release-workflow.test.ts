@@ -185,6 +185,7 @@ describe("release workflow", () => {
     expect(workflow).toContain(
       "mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07",
     );
+    expect(browserJob).toContain("options: --ipc=host --user pwuser");
     expect(manifest.devDependencies["@playwright/test"]).toBe("1.62.0");
     expect(browserJob).not.toContain("playwright install");
     expect(workflow.match(/npx playwright test(?:\s|$)/g)).toHaveLength(1);
