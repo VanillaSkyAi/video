@@ -22,9 +22,6 @@ jobs:
   verify:
     needs: repository-identity
     runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07
-      options: --init --ipc=host --user pwuser
     timeout-minutes: 15
     permissions:
       contents: read
@@ -53,6 +50,7 @@ jobs:
       - name: Install the locked npm CLI
         run: npm install --global npm@11.17.0
       - run: npm ci
+      - run: npx playwright install chromium
 
       - name: Build release artifact
         id: artifact

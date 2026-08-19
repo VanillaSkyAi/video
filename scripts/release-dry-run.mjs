@@ -233,8 +233,11 @@ try {
       ["viteBuild", "example:build"],
       ["serverTypes", "server-examples:typecheck"],
       ["providerCompatibility", "server-examples:compat"],
-      ["browsers", "browser:test"],
     ]) run("npm", ["run", npmScript], { environment: artifactEnvironment, resultName });
+    const browserArguments = ciMode
+      ? ["run", "browser:test", "--", "--project=chromium"]
+      : ["run", "browser:test"];
+    run("npm", browserArguments, { environment: artifactEnvironment, resultName: "browsers" });
   }
   releaseNpmGuard.assertComplete();
 

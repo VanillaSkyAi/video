@@ -108,17 +108,21 @@ describe("release workflow", () => {
     );
   });
 
-  it("uses the pinned Playwright image for browser-facing release verification", () => {
+  it("builds the candidate on the host and isolates published browser verification", () => {
     const workflow = readFileSync(".github/workflows/release.yml", "utf8");
+    const releaseDryRun = readFileSync("scripts/release-dry-run.mjs", "utf8");
     const verifyJob = workflow.split("  verify:")[1].split("  publish-npm:")[0];
     const publishedJob = workflow.split("  verify-published:")[1].split("  publish-github-release:")[0];
     const image = "mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07";
 
-    for (const job of [verifyJob, publishedJob]) {
-      expect(job).toContain(`image: ${image}`);
-      expect(job).toContain("options: --init --ipc=host --user pwuser");
-      expect(job).not.toContain("playwright install");
-    }
+    expect(verifyJob).not.toContain("container:");
+    expect(verifyJob).toContain("npx playwright install chromium");
+    expect(publishedJob).toContain(`image: ${image}`);
+    expect(publishedJob).toContain("options: --init --ipc=host --user pwuser");
+    expect(publishedJob).not.toContain("playwright install");
+    expect(releaseDryRun).toContain(
+      '? ["run", "browser:test", "--", "--project=chromium"]',
+    );
   });
 
   it("documents the fresh-repository and exact first-tag cutover prerequisite", () => {
