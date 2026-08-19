@@ -180,7 +180,8 @@ describe("release workflow", () => {
     expect(workflow).toContain("provider-compatibility:");
     expect(workflow).toMatch(/consumer-compatibility:[\s\S]*?npm run verify:onboarding/);
     expect(workflow).toMatch(/provider-compatibility:[\s\S]*?npm run verify:nextjs/);
-    expect(workflow.match(/npx playwright install --with-deps chromium firefox webkit/g)).toHaveLength(1);
+    expect(workflow.match(/npx playwright install chromium firefox webkit/g)).toHaveLength(1);
+    expect(workflow).not.toContain("playwright install --with-deps");
     expect(workflow.match(/npx playwright test(?:\s|$)/g)).toHaveLength(1);
     expect(workflow).not.toContain("matrix.browser");
     expect(workflow.match(/timeout-minutes:/g)).toHaveLength(6);

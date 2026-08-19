@@ -121,5 +121,5 @@ jobs:
         run: npm install --global npm@11.17.0
       - run: npm ci
       - run: npm run examples:install-current
-      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npx playwright install chromium firefox webkit
       - run: npx playwright test
