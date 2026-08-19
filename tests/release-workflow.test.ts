@@ -173,15 +173,20 @@ describe("release workflow", () => {
     expect(workflow).toContain("actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0");
   });
 
-  it("parallelizes expensive consumer gates and installs all browsers once", () => {
+  it("parallelizes expensive consumer gates and uses one immutable browser image", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+    const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+    const browserJob = workflow.split("  browser-compatibility:")[1];
 
     expect(workflow).toContain("consumer-compatibility:");
     expect(workflow).toContain("provider-compatibility:");
     expect(workflow).toMatch(/consumer-compatibility:[\s\S]*?npm run verify:onboarding/);
     expect(workflow).toMatch(/provider-compatibility:[\s\S]*?npm run verify:nextjs/);
-    expect(workflow.match(/npx playwright install chromium firefox webkit/g)).toHaveLength(1);
-    expect(workflow).not.toContain("playwright install --with-deps");
+    expect(workflow).toContain(
+      "mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07",
+    );
+    expect(manifest.devDependencies["@playwright/test"]).toBe("1.62.0");
+    expect(browserJob).not.toContain("playwright install");
     expect(workflow.match(/npx playwright test(?:\s|$)/g)).toHaveLength(1);
     expect(workflow).not.toContain("matrix.browser");
     expect(workflow.match(/timeout-minutes:/g)).toHaveLength(6);
