@@ -116,7 +116,7 @@ describe("release workflow", () => {
 
     for (const job of [verifyJob, publishedJob]) {
       expect(job).toContain(`image: ${image}`);
-      expect(job).toContain("options: --ipc=host --user pwuser");
+      expect(job).toContain("options: --init --ipc=host --user pwuser");
       expect(job).not.toContain("playwright install");
     }
   });
