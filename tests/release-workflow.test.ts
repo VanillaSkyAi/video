@@ -53,17 +53,15 @@ describe("release workflow", () => {
     expect(workflow).not.toMatch(/^permissions:\n\s+contents: write/m);
   });
 
-  it("bootstraps only the first npm publish, then hands future releases to OIDC", () => {
+  it("publishes through the configured OIDC trusted publisher without a long-lived token", () => {
     const workflow = readFileSync(".github/workflows/release.yml", "utf8");
     const guide = readFileSync("docs/maintainers/releasing.md", "utf8");
 
-    expect(workflow).toContain("Require first-publish bootstrap authentication");
-    expect(workflow).toContain("NPM_BOOTSTRAP_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}");
-    expect(workflow).toContain("needs.verify.outputs.version == '0.1.0'");
-    expect(guide).toContain("NPM_BOOTSTRAP_TOKEN");
-    expect(guide).toContain("npm trust github @vanillaskyai/video");
-    expect(guide).toMatch(/revoke.*bootstrap token/is);
-    expect(guide).toMatch(/delete.*NPM_BOOTSTRAP_TOKEN/is);
+    expect(workflow).toContain("id-token: write");
+    expect(workflow).not.toContain("NPM_BOOTSTRAP_TOKEN");
+    expect(workflow).not.toContain("NODE_AUTH_TOKEN");
+    expect(guide).not.toMatch(/bootstrap|first[- ]release/i);
+    expect(guide).toMatch(/trusted publisher/i);
   });
 
   it("pins actions, npm, repository identity, ancestry, and annotated-tag eligibility", () => {
@@ -125,7 +123,7 @@ describe("release workflow", () => {
     );
   });
 
-  it("documents the fresh-repository and exact first-tag cutover prerequisite", () => {
+  it("documents a repeatable preflight for every new release tag", () => {
     const guide = readFileSync("docs/maintainers/releasing.md", "utf8");
     const preflight = readFileSync("scripts/release-preflight.mjs", "utf8");
     const manifest = JSON.parse(readFileSync("package.json", "utf8"));
@@ -133,10 +131,9 @@ describe("release workflow", () => {
     expect(manifest.scripts["release:preflight"]).toBe("node scripts/release-preflight.mjs");
     expect(guide).toContain("npm run release:preflight");
     expect(guide).toContain("VanillaSkyAi/video");
-    expect(guide).toMatch(/fresh repository/i);
-    expect(guide).toMatch(/without importing.*tags|must not import.*tags/is);
-    expect(guide).toContain("VanillaSkyAi/vanillasky-sdk");
-    expect(guide).toMatch(/unrelated historical `v0\.1\.0`/i);
+    expect(guide).toMatch(/before creating.*tag/is);
+    expect(guide).not.toContain("VanillaSkyAi/vanillasky-sdk");
+    expect(guide).not.toMatch(/fresh repository|first[- ]release/i);
     expect(preflight).toContain('"ls-remote", "--exit-code", "--tags", "origin"');
     expect(guide).toMatch(/publish.*exact.*tarball[\s\S]*site/i);
   });

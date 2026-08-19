@@ -92,7 +92,7 @@ describe("local release dry run", () => {
     expect(orchestrator).not.toContain('assertEqual(packageManifest.version, "0.1.0", "first release version")');
   });
 
-  it("requires compatibility, first-release, signing, and immutable release guidance", () => {
+  it("requires compatibility, signing, and immutable release guidance", () => {
     const changelog = readFileSync(resolve(root, "CHANGELOG.md"), "utf8");
     const releasing = readFileSync(resolve(root, "docs", "maintainers", "releasing.md"), "utf8");
     expect(changelog).toContain("### Compatibility");

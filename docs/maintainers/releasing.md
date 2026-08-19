@@ -15,55 +15,25 @@ The current automation is intentionally scoped to the `0.x` public beta line:
 before a stable `1.0.0`, remove the beta-only release-note and compatibility
 checks in a separately reviewed change.
 
-## First-release repository prerequisite
+## Before creating a release tag
 
-The first public release runs only from the fresh repository
-`VanillaSkyAi/video`. Create that repository from the reviewed candidate tree
-without importing Git history or tags from `VanillaSkyAi/vanillasky-sdk`. The
-superseded repository has an unrelated historical `v0.1.0`; never move,
-rewrite, delete, or reuse that tag for this package. The workflow has an
-always-visible repository identity job and fails if a release tag is pushed in
-the superseded repository.
+`VanillaSkyAi/video` is the canonical repository. npm publishing uses the
+trusted publisher bound to `.github/workflows/release.yml`, this repository,
+and the `npm` GitHub environment. The release job receives a short-lived OIDC
+identity and never reads a long-lived npm token.
 
-Before creating the first tag in the fresh repository, confirm that the exact
-candidate is on a green `main` and that the tag is absent:
+After the release pull request is merged and `main` is green, confirm that the
+exact candidate is approved and its version tag is absent:
 
 ```bash
 git fetch origin main --tags
 npm run release:preflight
 ```
 
-The preflight fails unless the remote and package metadata both name the fresh
-repository, the clean checkout is exactly approved `origin/main`, and
-`v0.1.0` is absent locally and remotely. Do not push the release tag until it
-passes. A local manifest with
-`pending-annotated` describes the candidate's local state only; it is not proof
-that a similarly named tag is absent from another repository.
-
-### Bootstrap npm once
-
-npm only allows a trusted publisher to be configured after its package exists.
-For `0.1.0` only, create a one-day granular token with read/write access to the
-`@vanillaskyai` package scope, no organization-management access, and bypass
-2FA enabled. A package-specific token cannot target a package that does not yet
-exist. Add the token to the fresh GitHub repository as
-`NPM_BOOTSTRAP_TOKEN`. The release still runs on GitHub with `id-token: write`
-and publishes with provenance; the token supplies registry authentication for
-this first version only.
-
-Immediately after `0.1.0` is verified, configure the permanent publisher:
-
-```bash
-npm trust github @vanillaskyai/video \
-  --file release.yml \
-  --repo VanillaSkyAi/video \
-  --env npm \
-  --allow-publish
-```
-
-Then revoke the bootstrap token on npm, delete the `NPM_BOOTSTRAP_TOKEN` GitHub
-secret, and set the package to require two-factor authentication while
-disallowing token publication. All later releases use OIDC only.
+The preflight fails unless the remote and package metadata name the canonical
+repository, the clean checkout exactly matches approved `origin/main`, the
+package version is valid SemVer, and that version's tag is absent locally and
+remotely. Do not create or push the tag until it passes.
 
 ## Prepare a candidate
 

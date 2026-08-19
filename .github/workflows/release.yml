@@ -10,7 +10,7 @@ jobs:
   repository-identity:
     runs-on: ubuntu-latest
     steps:
-      - name: Reject release tags from the superseded repository
+      - name: Verify release repository identity
         env:
           EXPECTED_REPOSITORY: VanillaSkyAi/video
         run: |
@@ -120,29 +120,12 @@ jobs:
           fi
           node scripts/verify-release-integrity.mjs dist-tags-transition "${{ needs.verify.outputs.name }}" "${{ needs.verify.outputs.version }}" "$release_tag"
 
-      # npm trusted publishers can only be configured after a package exists.
-      # v0.1.0 therefore uses one short-lived package-scoped token; later
-      # releases authenticate through OIDC and this secret must be absent.
-      - name: Require first-publish bootstrap authentication
-        if: steps.registry.outputs.already-published != 'true' && needs.verify.outputs.version == '0.1.0'
-        env:
-          NPM_BOOTSTRAP_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
-        run: |
-          if [[ -z "$NPM_BOOTSTRAP_TOKEN" ]]; then
-            echo "The first npm publish requires the one-time NPM_BOOTSTRAP_TOKEN secret" >&2
-            exit 1
-          fi
-
       - name: Publish stable package with trusted provenance
         if: steps.registry.outputs.already-published != 'true' && needs.verify.outputs.prerelease == 'false'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
         run: npm publish "./release-assets/${{ needs.verify.outputs.artifact-filename }}" --provenance --access public --tag latest
 
       - name: Publish prerelease package with trusted provenance
         if: steps.registry.outputs.already-published != 'true' && needs.verify.outputs.prerelease == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
         run: npm publish "./release-assets/${{ needs.verify.outputs.artifact-filename }}" --provenance --access public --tag next
 
       - name: Verify npm artifact identity

@@ -1,4 +1,4 @@
-export interface FirstReleasePreflightInput {
+export interface ReleasePreflightInput {
   currentBranch: string;
   expectedRepository: string;
   head: string;
@@ -12,7 +12,7 @@ export interface FirstReleasePreflightInput {
   version: string;
 }
 
-export function assertFirstReleasePreflight(input: FirstReleasePreflightInput): {
+export function assertReleasePreflight(input: ReleasePreflightInput): {
   repository: string;
   tag: string;
   commit: string;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertFirstReleasePreflight } from "../scripts/lib/release-preflight.mjs";
+import { assertReleasePreflight } from "../scripts/lib/release-preflight.mjs";
 
 const valid = {
   currentBranch: "main",
@@ -12,14 +12,14 @@ const valid = {
   remoteTagExists: false,
   remoteUrl: "git@github.com:VanillaSkyAi/video.git",
   status: "",
-  version: "0.1.0",
+  version: "0.1.1",
 };
 
-describe("first release preflight", () => {
-  it("accepts only a clean approved main in the fresh repository before the first tag", () => {
-    expect(assertFirstReleasePreflight(valid)).toEqual({
+describe("release preflight", () => {
+  it("accepts a clean approved main before creating the next version tag", () => {
+    expect(assertReleasePreflight(valid)).toEqual({
       repository: "VanillaSkyAi/video",
-      tag: "v0.1.0",
+      tag: "v0.1.1",
       commit: valid.head,
     });
   });
@@ -30,9 +30,10 @@ describe("first release preflight", () => {
     ["feature branch", { currentBranch: "reset/final-feedback" }, /main/i],
     ["unapproved commit", { originMain: "b".repeat(40) }, /origin\/main/i],
     ["dirty tree", { status: " M package.json" }, /clean/i],
-    ["local old tag", { localTagExists: true }, /local tag/i],
-    ["remote old tag", { remoteTagExists: true }, /remote tag/i],
+    ["invalid version", { version: "next" }, /version/i],
+    ["local existing tag", { localTagExists: true }, /local tag/i],
+    ["remote existing tag", { remoteTagExists: true }, /remote tag/i],
   ])("rejects %s", (_name, change, expected) => {
-    expect(() => assertFirstReleasePreflight({ ...valid, ...change })).toThrow(expected);
+    expect(() => assertReleasePreflight({ ...valid, ...change })).toThrow(expected);
   });
 });
