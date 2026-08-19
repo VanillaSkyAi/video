@@ -1,0 +1,110 @@
+# Provider onboarding evidence
+
+## Canonical path
+
+The committed Next.js quickstart has one route, planner, and React client. A
+server-only module selects `openai` or `anthropic` from `VIDEO_PROVIDER` and the
+model from `VIDEO_MODEL`. Both official provider adapters use the Vercel AI SDK.
+No provider choice, model ID, key name, usage, or provider metadata is imported
+by the client.
+
+The app demonstrates:
+
+- production requests denied with `401` until host authentication replaces the
+  development-only localhost policy;
+- safe typed client warnings and `VideoError` handling;
+- normalized usage and model lifecycle fields logged only by server callbacks;
+- a project-owned `activationLift` template with matching browser/server
+  registries;
+- completed `Video` persistence, `parseVideo` validation, saved replay, and
+  `getVideoDuration`.
+
+## Deterministic and live acceptance
+
+Deterministic CI does not read real provider credentials. It installs the exact
+npm tarball in isolated OpenAI and Anthropic consumers, replaces only the two
+external provider adapter implementations with AI SDK test models, builds both
+configurations, starts each production build, verifies fail-closed auth, and
+then exercises the same route/client in a browser. Each isolated process receives
+distinct fake credentials for both providers. The selected adapter must consume
+the correct one, and the forced-failure path retains it only in a private cause.
+
+The same exact-artifact gate verifies provider-neutral compatibility with the
+real `@ai-sdk/google@4.0.44` and
+`@openrouter/ai-sdk-provider@3.0.0` factories through `ai@7.0.66`. Those two
+compatibility consumers inject a local `fetch`, parse provider-native SSE, and
+make no provider-network request. These packages remain fixture-only: they are
+not SDK dependencies, peers, exports, or extra quickstarts.
+
+Live acceptance remains the separate `npm run acceptance:live` release-candidate
+command documented in `docs/maintainers/acceptance.md`. It is not part of
+deterministic CI and is not run without an explicit provider, available model,
+credential, and human-quality review.
+
+## Setup-time evidence
+
+`npm run verify:nextjs` prints machine-readable evidence for each provider:
+packed artifact version/integrity, install/build/start/first-video timings, and
+total `setupTimeMs`. The automated clean-room threshold is 15 minutes. Retain
+the final machine-readable lines with the release evidence and bind them to the
+candidate commit, tar SHA-256, and npm integrity. Timing is environment-sensitive,
+so this repository does not keep an unbound "latest" table or copy timings from a
+superseded candidate.
+
+The gate requires both production builds to return `401` without host
+authentication. Both browser runs render `activationLift`, surface
+`provider_warning`, record normalized
+10/5/15 token usage only in server output, persisted the terminal video, and
+replayed it after a real page reload at the public six-second duration without
+another generation request. Each variant also proved a behaviorally distinct
+provider/model sentinel, a typed `generation_failed` provider error plus server
+error callback, and no provider metadata or fake credential name/value in
+successful or failed SSE, DOM, local storage, the static browser bundle, or
+retained public evidence. The exact installed CLI passed both `vanillasky sync
+--check` and `vanillasky check` before each build. The Google and OpenRouter
+cases additionally proved one injected native request, real provider-factory
+parsing, server-private provider metadata, and zero provider or generation
+requests during saved replay.
+
+## Friction log
+
+Observed before this work package:
+
+- the quickstart was OpenAI-only and used an OpenAI-specific model variable;
+- the packed test replaced the planner, so it bypassed the documented AI SDK
+  integration and could not prove provider parity;
+- lifecycle warnings and server-only normalized usage were documented elsewhere
+  but absent from the canonical app;
+- the app did not show how to persist, validate, time, or replay its result;
+- no project-owned template proved server/browser registry wiring;
+- fail-closed production auth was tested only by the broad documented-example
+  verifier, not by both provider variants in the canonical gate.
+- the first dual-provider verifier used port `4190`, which Node's standards-based
+  `fetch` correctly rejects as an unsafe port even though Next.js was healthy;
+  the gate now uses safe ports and cleans up its process tree on readiness errors.
+- Next.js added its current `allowJs`, `skipLibCheck`, `incremental`, and dev type
+  include settings during the first clean build; they are now committed so a
+  copied app builds without silently rewriting TypeScript configuration.
+- the initially committed quickstart registries were semantically correct but
+  hand-authored, so the exact packed CLI rejected both as stale; they are now
+  generated by `vanillasky sync`, committed byte-for-byte, and guarded in both
+  provider variants;
+- the first deterministic provider stubs only differed by export name and could
+  not catch a selector wired to the wrong adapter; fixed provider-specific input
+  and resolved model IDs plus server-only selection sentinels now make a wrong
+  provider fail the successful browser flow;
+- the first persistence assertion only observed the saved copy before reload;
+  the gate now reloads the actual page, renders the validated saved video, and
+  proves the reload sends zero generation POSTs;
+- the first gate checked only one usage field and the static bundle boundary;
+  it now compares the complete normalized usage object and checks SSE, DOM,
+  local storage, and static output against a provider metadata sentinel.
+- the first credential-boundary check proved browser isolation without proving
+  the deterministic provider actually consumed a credential; each provider now
+  validates its own distinct fake value, places it in the private failure cause,
+  and proves both fake names and values are absent from every retained public
+  surface.
+
+The remaining intentional owner steps are choosing account-available model IDs,
+supplying credentials only in a trusted server environment, replacing the local
+authorization function, and selecting durable tenant-scoped storage.

@@ -1,0 +1,22 @@
+# Security policy
+
+## Supported versions
+
+Security fixes target the latest published version of `@vanillaskyai/video`.
+Upgrade to the current release before reporting behavior that may already have
+been corrected.
+
+## Report a vulnerability
+
+Use [GitHub private vulnerability reporting](https://github.com/VanillaSkyAi/video/security/advisories/new)
+to report a suspected vulnerability. Do not open a public issue, discussion,
+or pull request containing exploit details, credentials, customer data, or an
+unannounced vulnerability.
+
+Include the affected version, impact, reproduction steps, and any suggested
+mitigation. Maintainers will validate the report and coordinate remediation and
+disclosure when appropriate, without a guaranteed response time.
+
+For deployment guidance covering authentication, provider credentials, request
+limits, media policy, and logging, read the
+[integration security guide](docs/security.md).

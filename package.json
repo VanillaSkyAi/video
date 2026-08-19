@@ -1,0 +1,167 @@
+{
+  "name": "@vanillaskyai/video",
+  "version": "0.1.0",
+  "description": "Open-source video response SDK for personalized AI applications.",
+  "keywords": [
+    "generative-video",
+    "personalized-video",
+    "video-response",
+    "ai-output",
+    "contextual-ai",
+    "streaming",
+    "react",
+    "llm",
+    "video"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VanillaSkyAi/video.git"
+  },
+  "bugs": {
+    "url": "https://github.com/VanillaSkyAi/video/issues"
+  },
+  "homepage": "https://vanillasky.ai",
+  "files": [
+    "bin",
+    "dist",
+    "registry/items",
+    "examples/custom-template",
+    "examples/nextjs-quickstart/.env.example",
+    "examples/nextjs-quickstart/README.md",
+    "examples/nextjs-quickstart/next-env.d.ts",
+    "examples/nextjs-quickstart/package.json",
+    "examples/nextjs-quickstart/src",
+    "examples/nextjs-quickstart/tsconfig.json",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "SUPPORT.md",
+    "PUBLIC-API.md",
+    "docs/reference/provider-adapters.md",
+    "docs/reference/protocol.md",
+    "CHANGELOG.md",
+    "docs/*.md",
+    "docs/reference"
+  ],
+  "bin": {
+    "vanillasky": "bin/vanillasky.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js",
+      "default": "./dist/server.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js",
+      "default": "./dist/react.js"
+    },
+    "./templates": {
+      "types": "./dist/templates.d.ts",
+      "import": "./dist/templates.js",
+      "default": "./dist/templates.js"
+    },
+    "./templates/catalog": {
+      "types": "./dist/template-catalog.d.ts",
+      "import": "./dist/template-catalog.js",
+      "default": "./dist/template-catalog.js"
+    },
+    "./test": {
+      "types": "./dist/test.d.ts",
+      "import": "./dist/test.js",
+      "default": "./dist/test.js"
+    }
+  },
+  "scripts": {
+    "acceptance:live": "tsx scripts/acceptance/run-live.ts",
+    "acceptance:review": "tsx scripts/acceptance/review.ts",
+    "acceptance:replay": "tsx scripts/acceptance/run-replay.ts",
+    "browser:install": "playwright install chromium firefox webkit",
+    "browser:test": "playwright test",
+    "build": "tsup",
+    "example:install": "npm run examples:install-current",
+    "example:build": "npm run build --prefix examples/react-vite",
+    "example:dev": "npm run dev --prefix examples/react-vite",
+    "example:preview": "npm run preview --prefix examples/react-vite -- --host 127.0.0.1 --port 4187 --strictPort",
+    "examples:verify-documented": "node scripts/verify-documented-examples.mjs",
+    "examples:install-current": "npm run build && node scripts/install-current-examples.mjs",
+    "server-examples:typecheck": "npm run typecheck --prefix examples/server-integrations",
+    "server-examples:compat": "npm run ai-sdk:compat --prefix examples/server-integrations",
+    "lint": "eslint .",
+    "catalog:sync": "tsx scripts/generate-builtin-catalog.ts",
+    "catalog:check": "tsx scripts/generate-builtin-catalog.ts --check",
+    "registry:sync": "npm run catalog:sync && node scripts/sync-template-registry.mjs",
+    "registry:check": "node scripts/sync-template-registry.mjs --check && npm run catalog:check",
+    "template:check": "tsx scripts/template-check.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepack": "npm run build",
+    "verify:onboarding": "node scripts/verify-onboarding.mjs",
+    "verify:nextjs": "node scripts/verify-nextjs-onboarding.mjs",
+    "verify:published": "node scripts/verify-published-package.mjs",
+    "verify:package-size": "tsx scripts/verify-package-size.ts",
+    "verify:api": "npm run build && node scripts/verify-public-api-surface.mjs",
+    "verify:package": "npm run build && node scripts/verify-packed-package.mjs",
+    "release:dry-run": "node scripts/release-dry-run.mjs",
+    "release:preflight": "node scripts/release-preflight.mjs",
+    "release:check": "npm run verify:api && npm run release:dry-run"
+  },
+  "peerDependencies": {
+    "react": ">=18 <20",
+    "react-dom": ">=18 <20",
+    "tsx": ">=4.19 <5"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "tsx": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
+    "@eslint/js": "^9.39.1",
+    "@playwright/test": "1.62.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^24.10.1",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "eslint": "^9.39.1",
+    "es-module-lexer": "^1.7.0",
+    "globals": "^16.5.0",
+    "jsdom": "^26.1.0",
+    "openai": "^7.4.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.1",
+    "tsx": "^4.23.12",
+    "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "esbuild": "^0.28.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@11.17.0",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

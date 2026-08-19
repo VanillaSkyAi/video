@@ -1,0 +1,27 @@
+{
+  "name": "vanillasky-server-integrations",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "ai-sdk:compat": "tsx src/ai-sdk.compat.ts",
+    "ai-sdk": "tsx src/ai-sdk.ts",
+    "provider-neutral": "tsx src/provider-neutral.ts",
+    "openai-native": "tsx src/openai.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.42",
+    "@vanillaskyai/video": "0.1.0",
+    "ai": "^7.0.66",
+    "openai": "^7.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3"
+  }
+}
