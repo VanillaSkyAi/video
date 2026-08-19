@@ -22,6 +22,10 @@ jobs:
   verify:
     needs: repository-identity
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07
+      options: --ipc=host --user pwuser
+    timeout-minutes: 15
     permissions:
       contents: read
     outputs:
@@ -32,19 +36,23 @@ jobs:
       sha256: ${{ steps.artifact.outputs.sha256 }}
       version: ${{ steps.artifact.outputs.version }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      # checkout fetches the peeled event SHA back into refs/tags/<name>,
+      # replacing the annotated tag object that the first full fetch obtained.
+      - name: Restore annotated release tag object
+        run: git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.23.1"
 
       - name: Install the locked npm CLI
         run: npm install --global npm@11.17.0
       - run: npm ci
-      - run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Build release artifact
         id: artifact
@@ -72,11 +80,11 @@ jobs:
     outputs:
       already-published: ${{ steps.registry.outputs.already-published }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.23.1"
           registry-url: https://registry.npmjs.org
@@ -152,19 +160,22 @@ jobs:
   verify-published:
     needs: [verify, publish-npm]
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07
+      options: --ipc=host --user pwuser
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.23.1"
       - name: Install the locked npm CLI
         run: npm install --global npm@11.17.0
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
 
       - name: Verify published npm package
         env:
@@ -187,7 +198,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
