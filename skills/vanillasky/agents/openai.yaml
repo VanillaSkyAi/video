@@ -1,0 +1,4 @@
+interface:
+  display_name: "VanillaSky"
+  short_description: "Build LLM-planned video responses"
+  default_prompt: "Use $vanillasky to turn application data into a personalized video response."

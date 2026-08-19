@@ -1,0 +1,116 @@
+{
+  "@vanillaskyai/video": {
+    "source": "src/index.ts",
+    "declaration": "dist/index.d.ts",
+    "runtime": "dist/index.js",
+    "environment": "universal",
+    "runtimeExports": [
+      "VideoValidationError",
+      "getVideoDuration",
+      "parseVideo"
+    ],
+    "typeExports": [
+      "Video",
+      "VideoAudio",
+      "VideoBackground",
+      "VideoBrand",
+      "VideoInput",
+      "VideoOrientation",
+      "VideoScene",
+      "VideoStatus",
+      "VideoStyle",
+      "VideoStyleOptions",
+      "VideoSuppliedMedia",
+      "VideoValidationError",
+      "VideoValidationErrorCode"
+    ]
+  },
+  "@vanillaskyai/video/server": {
+    "source": "src/server.ts",
+    "declaration": "dist/server.d.ts",
+    "runtime": "dist/server.js",
+    "environment": "server",
+    "runtimeExports": [
+      "createServerTemplateRegistry",
+      "createVideoHandler"
+    ],
+    "typeExports": [
+      "ServerTemplateMetadata",
+      "ServerTemplateRegistry",
+      "VideoFinishReason",
+      "VideoGenerationSummary",
+      "VideoHandlerOptions",
+      "VideoProviderUsage",
+      "VideoWarning",
+      "VideoWarningCategory"
+    ]
+  },
+  "@vanillaskyai/video/react": {
+    "source": "src/react.ts",
+    "declaration": "dist/react.d.ts",
+    "runtime": "dist/react.js",
+    "environment": "browser",
+    "runtimeExports": [
+      "VideoError",
+      "VideoPlayer",
+      "useVideo"
+    ],
+    "typeExports": [
+      "UseVideoOptions",
+      "UseVideoResult",
+      "VideoError",
+      "VideoErrorOptions",
+      "VideoPlayerProps"
+    ]
+  },
+  "@vanillaskyai/video/templates": {
+    "source": "src/templates.ts",
+    "declaration": "dist/templates.d.ts",
+    "runtime": "dist/templates.js",
+    "environment": "browser",
+    "runtimeExports": [
+      "createTemplateRegistry",
+      "defineTemplate"
+    ],
+    "typeExports": [
+      "SceneTemplate",
+      "SceneTemplateMetadata",
+      "SceneTemplateProps",
+      "TemplateTransitionTiming",
+      "TemplateDefinition",
+      "TemplateExample",
+      "TemplateFamily",
+      "TemplateJsonSchema",
+      "TemplateRegistry",
+      "TemplateTimingMetadata"
+    ]
+  },
+  "@vanillaskyai/video/templates/catalog": {
+    "source": "src/template-catalog.ts",
+    "declaration": "dist/template-catalog.d.ts",
+    "runtime": "dist/template-catalog.js",
+    "environment": "universal",
+    "runtimeExports": [
+      "builtinTemplates"
+    ],
+    "typeExports": [
+      "BuiltinTemplateId",
+      "BuiltinTemplateMetadata"
+    ]
+  },
+  "@vanillaskyai/video/test": {
+    "source": "src/test.ts",
+    "declaration": "dist/test.d.ts",
+    "runtime": "dist/test.js",
+    "environment": "test",
+    "runtimeExports": [
+      "createMockVideoPlanner",
+      "simulateVideoStream",
+      "videoFixtures"
+    ],
+    "typeExports": [
+      "MockVideoPlannerOptions",
+      "SimulatedVideoStreamOptions"
+    ]
+  }
+}

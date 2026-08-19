@@ -1,0 +1,101 @@
+import type { VideoInput, VideoPlanPart } from "../../protocol/types.js";
+
+const SUPPLIED_MEDIA_REFERENCE_BASE = "https://vanillasky.invalid/supplied/";
+
+interface SuppliedMediaReference {
+  reference: string;
+  posterReference?: string;
+  type: "image" | "video";
+  description?: string;
+  mimeType?: string;
+  focalPoint?: string;
+  treatment?: string;
+  role?: string;
+}
+
+function suppliedMediaReferences(input: VideoInput): SuppliedMediaReference[] {
+  return (input.suppliedMedia ?? []).map((media, index) => ({
+    reference: `${SUPPLIED_MEDIA_REFERENCE_BASE}media-${index + 1}`,
+    ...(media.posterUrl ? { posterReference: `${SUPPLIED_MEDIA_REFERENCE_BASE}poster-${index + 1}` } : {}),
+    type: media.type,
+    ...(media.description ? { description: media.description } : {}),
+    ...(media.mimeType ? { mimeType: media.mimeType } : {}),
+    ...(media.focalPoint ? { focalPoint: media.focalPoint } : {}),
+    ...(media.treatment ? { treatment: media.treatment } : {}),
+    ...(media.role ? { role: media.role } : {}),
+  }));
+}
+
+function mediaReferenceMap(input: VideoInput): ReadonlyMap<string, string> {
+  const result = new Map<string, string>();
+  for (const [index, media] of (input.suppliedMedia ?? []).entries()) {
+    result.set(`${SUPPLIED_MEDIA_REFERENCE_BASE}media-${index + 1}`, media.url);
+    if (media.posterUrl) result.set(`${SUPPLIED_MEDIA_REFERENCE_BASE}poster-${index + 1}`, media.posterUrl);
+  }
+  return result;
+}
+
+function resolveReferences(value: unknown, references: ReadonlyMap<string, string>): unknown {
+  if (typeof value === "string") return references.get(value) ?? value;
+  if (Array.isArray(value)) return value.map((item) => resolveReferences(item, references));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .map(([key, child]) => [key, resolveReferences(child, references)]));
+}
+
+/** Resolve only SDK-issued opaque media references after provider output is parsed. */
+export function resolveSuppliedMediaPlanPart(part: VideoPlanPart, input: VideoInput): VideoPlanPart {
+  const references = mediaReferenceMap(input);
+  if (references.size === 0) return part;
+  if (part.type === "scene.add") {
+    return { ...part, scene: { ...part.scene, variables: resolveReferences(part.scene.variables, references) as Record<string, unknown> } };
+  }
+  if (part.type === "scene.patch" && part.patch.variables) {
+    return { ...part, patch: { ...part.patch, variables: resolveReferences(part.patch.variables, references) as Record<string, unknown> } };
+  }
+  if (part.type === "asset.patch") {
+    return { ...part, variables: resolveReferences(part.variables, references) as Record<string, unknown> };
+  }
+  return part;
+}
+
+export function buildVideoUserPrompt(input: VideoInput, openingDurationSec = 0): string {
+  return [
+    "Compose a video response from the structured customer input below.",
+    `Maximum duration: ${input.maxDurationSec ?? 30} seconds, including the supplied opening.`,
+    input.opening?.trim()
+      ? `The host has already added the opening scene, which consumes ${openingDurationSec} seconds. Continue after it and do not repeat or rewrite it.`
+      : "Add the first grounded scene as soon as it is complete.",
+    "The first generated body scene must be fully playable without external media. Use a content-fit text, data, comparison, list, or device-free template with no media URL or keyword.",
+    "Never use media, ctaMedia, or reaction as the first generated body template, even with mediaType=gradient. Choose a non-media template first.",
+    "Add that scene before resolving any stock or supplied asset. Media belongs on later body scenes and must arrive without blocking scene additions.",
+    "The raw input is the complete factual boundary. Do not add outside claims.",
+    "Select the most decision-relevant grounded takeaways that fit the duration; represent each selected takeaway once before completing the response.",
+    "For a long source, summarize instead of attempting to represent every fact, unless the creative instructions explicitly request complete fact coverage that fits the duration.",
+    "Preserve exact wording and numbers for the takeaways you select. Preserve qualifiers, units, denominators, ranges, and comparison direction; for example, do not shorten 4.8 out of 5 to 4.8.",
+    "Choose the scene count from the distinct grounded material and the duration budget. Use fewer scenes for sparse input; continue beyond five when rich input warrants it and timing allows.",
+    "Use a different suitable template for each body scene when the catalog supports it.",
+    "Never add filler to satisfy a count or diversity target.",
+    input.suppliedMedia?.length
+      ? "Select zero or more relevant opaque supplied-media references for visible later scenes. Never invent or transform a reference, and never emit mediaKeyword without a resolved mediaUrl."
+      : "Use asset-free templates. No media URL has been supplied or resolved. Never emit mediaKeyword without a resolved mediaUrl.",
+    "",
+    "RAW INPUT",
+    input.input.trim(),
+    "",
+    "CREATIVE INSTRUCTIONS",
+    input.instructions?.trim() || "None supplied.",
+    "",
+    "PERSONALIZATION",
+    JSON.stringify(input.personalization ?? {}),
+    "",
+    "SUPPLIED MEDIA",
+    JSON.stringify(suppliedMediaReferences(input)),
+    "",
+    "BRAND",
+    JSON.stringify({
+      ...(input.brand?.name?.trim() ? { name: input.brand.name.trim() } : {}),
+      hasLogo: Boolean(input.brand?.logoUrl?.trim()),
+    }),
+  ].join("\n");
+}

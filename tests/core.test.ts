@@ -1,0 +1,887 @@
+import { describe, expect, it, vi } from "vitest";
+
+describe("video response core", () => {
+  it("carries optional global visual direction into the deterministic video style", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({
+      input: "A calm customer update.",
+      style: {
+        density: "airy",
+        motion: "calm",
+        textArchetype: "cinematic",
+        backgroundEffect: "slow-zoom-out",
+      },
+    }, {
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: { id: "one", templateId: "notification", variables: { message: "Update" }, timing: { fixedDuration: 2 } },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    for await (const _event of response.stream) { /* consume */ }
+    expect((await response.result).config?.style).toMatchObject({
+      density: "airy",
+      motion: "calm",
+      defaultTextArchetype: "cinematic",
+      defaultBackgroundEffect: "slow-zoom-out",
+    });
+    expect((await response.result).config?.style).not.toHaveProperty("preset");
+  });
+
+  it("provides typed planner-part helpers distinct from emitted events", async () => {
+    const { addScene, completePlan } = await import("../src/internal");
+    const scene = { id: "result", templateId: "bigNumber", variables: { value: 42 }, timing: { fixedDuration: 4 } };
+
+    expect(addScene(scene)).toEqual({ type: "scene.add", scene });
+    expect(completePlan()).toEqual({ type: "plan.complete" });
+    expect(completePlan("length")).toEqual({ type: "plan.complete", finishReason: "length" });
+  });
+
+  it("keeps raw input and supplied-media URLs out of snapshots unless bounded fields are explicitly retained", async () => {
+    const { createVideo } = await import("../src/internal");
+    const generate = async function* () {
+      yield {
+        type: "scene.add" as const,
+        scene: {
+          id: "summary",
+          templateId: "notification",
+          variables: { message: "Safe summary" },
+          timing: { fixedDuration: 3 },
+        },
+      };
+      yield { type: "plan.complete" as const };
+    };
+    const input = {
+      input: `Customer-confidential source ${"s".repeat(20_000)}`,
+      instructions: `Private creative direction ${"i".repeat(5_000)}`,
+      suppliedMedia: Array.from({ length: 20 }, (_, index) => ({
+        id: `media-${index}`,
+        type: "image" as const,
+        url: `https://media.example.test/${index}/${"u".repeat(1_900)}`,
+      })),
+    };
+
+    const privateByDefault = createVideo(input, { generate });
+    for await (const _event of privateByDefault.stream) { /* consume */ }
+    const privateState = await privateByDefault.result;
+    expect(privateState.config?.schemaVersion).toBe("0.1");
+    expect(privateState.config?.meta).not.toHaveProperty("source");
+    expect(privateState.config?.meta).not.toHaveProperty("prompt");
+    expect(privateState.config?.meta).not.toHaveProperty("uploadedMediaUrls");
+
+    const retained = createVideo(input, {
+      generate,
+      snapshotRetention: {
+        source: true,
+        instructions: true,
+        suppliedMediaUrls: true,
+      },
+    });
+    for await (const _event of retained.stream) { /* consume */ }
+    const retainedState = await retained.result;
+    expect(retainedState.config?.meta?.source).toHaveLength(16_384);
+    expect(retainedState.config?.meta?.prompt).toHaveLength(4_096);
+    expect(retainedState.config?.meta?.uploadedMediaUrls).toHaveLength(16);
+    expect(retainedState.config?.meta?.uploadedMediaUrls?.every((url) => url.length <= 2_048))
+      .toBe(true);
+  });
+
+  it("keeps supplied media addresses out of model prompts and resolves opaque references before validation", async () => {
+    const { createVideo } = await import("../src/internal");
+    const privateUrl = "data:image/png;base64,private-customer-bytes";
+    let observedPrompt = "";
+    let validatedUrl = "";
+    const response = createVideo({
+      input: "Show the supplied product image.",
+      suppliedMedia: [{ id: "product-shot", type: "image", url: privateUrl, role: "product" }],
+    }, {
+      validateScene: (scene) => { validatedUrl = String(scene.variables.mediaUrl); },
+      generate: async function* (context) {
+        observedPrompt = context.userPrompt;
+        const reference = context.userPrompt.match(/https:\/\/vanillasky\.invalid\/supplied\/[a-z0-9-]+/i)?.[0];
+        if (!reference) throw new Error("missing opaque supplied-media reference");
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "media",
+            templateId: "media",
+            variables: { mediaUrl: reference },
+            timing: { fixedDuration: 4 },
+          },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    for await (const _event of response.stream) { /* consume */ }
+    const state = await response.result;
+    expect(observedPrompt).not.toContain(privateUrl);
+    expect(observedPrompt).not.toContain("private-customer-bytes");
+    expect(validatedUrl).toBe(privateUrl);
+    expect(state.config?.scenes[0].variables.mediaUrl).toBe(privateUrl);
+  });
+
+  it("recovers content held for a closer when the planner emits no closer", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({ input: "Two grounded points.", maxDurationSec: 10 }, {
+      capabilities: { templates: ["body", "close"] },
+      getTemplatePacing: (id) => id === "close"
+        ? { jobs: ["ask"], minDuration: 3, preferredDuration: 3 }
+        : { jobs: ["claim"], minDuration: 2, preferredDuration: 7 },
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: { id: "body-1", templateId: "body", variables: {}, timing: { fixedDuration: 7 } },
+        };
+        yield {
+          type: "scene.add" as const,
+          scene: { id: "body-2", templateId: "body", variables: {}, timing: { fixedDuration: 2 } },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.filter(({ type }) => type === "scene.add").map((event) =>
+      event.type === "scene.add" ? event.data.scene.id : ""
+    )).toEqual(["body-1", "body-2"]);
+    expect(events.some((event) => event.type === "response.warning" &&
+      event.data.warning.code === "scene_omitted_for_closer")).toBe(false);
+    expect(events.at(-1)).toMatchObject({
+      type: "response.complete",
+      data: { finishReason: "stop", snapshot: { scenes: [{ id: "body-1" }, { id: "body-2" }] } },
+    });
+  });
+
+  it("preserves planner order while recovering multiple scenes held for a missing closer", async () => {
+    const { createVideo } = await import("../src/internal");
+    const durations: Record<string, number> = {
+      "body-1": 7,
+      "body-2": 4,
+      "body-3": 1,
+      close: 3,
+    };
+    const response = createVideo({ input: "Three ordered grounded points.", maxDurationSec: 12 }, {
+      capabilities: { templates: Object.keys(durations) },
+      getTemplatePacing: (id) => ({
+        jobs: id === "close" ? ["ask"] : ["claim"],
+        minDuration: durations[id],
+        preferredDuration: durations[id],
+      }),
+      generate: async function* () {
+        for (const id of ["body-1", "body-2", "body-3"]) {
+          yield {
+            type: "scene.add" as const,
+            scene: { id, templateId: id, variables: {}, timing: { fixedDuration: durations[id] } },
+          };
+        }
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    for await (const _event of response.stream) { /* consume */ }
+    expect((await response.result).config?.scenes.map(({ id }) => id))
+      .toEqual(["body-1", "body-2", "body-3"]);
+  });
+
+  it("treats supplied media as an optional approved pool", async () => {
+    const { createVideo } = await import("../src/internal");
+    const privateUrl = "https://private.example/customer-proof.png";
+    const response = createVideo({
+      input: "Grounded update.",
+      suppliedMedia: [{ id: "proof", type: "image", role: "proof", url: privateUrl }],
+    }, {
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: { id: "body", templateId: "notification", variables: { message: "Update" }, timing: { fixedDuration: 4 } },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(JSON.stringify(events)).not.toContain("supplied_media_unused");
+    expect(JSON.stringify(events)).not.toContain(privateUrl);
+  });
+
+  it("caps the emitted timeline at maxDurationSec", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({
+      input: "A concise update.",
+      maxDurationSec: 10,
+      opening: "Opening",
+    }, {
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "body",
+            templateId: "notification",
+            variables: { message: "Body" },
+            timing: { fixedDuration: 8 },
+          },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    for await (const _event of response.stream) { /* consume */ }
+    const state = await response.result;
+    expect(state.status).toBe("complete");
+    expect(state.config?.scenes.at(-1)?.timing).toMatchObject({ startTime: 5, endTime: 10 });
+  });
+
+  it("caps timing patches at maxDurationSec", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({ input: "Update", maxDurationSec: 10 }, {
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "body",
+            templateId: "notification",
+            variables: { message: "Body" },
+            timing: { fixedDuration: 4 },
+          },
+        };
+        yield {
+          type: "scene.patch" as const,
+          sceneId: "body",
+          patch: { timing: { endTime: 30 } },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.at(-1)).toMatchObject({ type: "response.complete" });
+    expect((await response.result).config?.scenes[0].timing).toMatchObject({
+      startTime: 0,
+      endTime: 10,
+      fixedDuration: 10,
+    });
+  });
+
+  it("re-paces a tail timing patch without consuming the reserved closer slot", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({ input: "Update", maxDurationSec: 30 }, {
+      capabilities: { templates: ["body", "close"] },
+      getTemplatePacing: (id) => id === "close"
+        ? { jobs: ["ask"], minDuration: 3, preferredDuration: 3 }
+        : { jobs: ["claim"], minDuration: 2, preferredDuration: 4 },
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: { id: "body", templateId: "body", variables: {}, timing: { fixedDuration: 4 } },
+        };
+        yield { type: "scene.patch" as const, sceneId: "body", patch: { timing: { endTime: 29 } } };
+        yield {
+          type: "scene.add" as const,
+          scene: { id: "close", templateId: "close", variables: {}, timing: { fixedDuration: 3 } },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.map(({ type }) => type)).toEqual([
+      "response.start",
+      "scene.add",
+      "response.warning",
+      "scene.patch",
+      "scene.add",
+      "response.complete",
+    ]);
+    expect(events[2]).toMatchObject({
+      data: { warning: { code: "scene_duration_adjusted", sceneId: "body" } },
+    });
+    expect((await response.result).config?.scenes).toMatchObject([
+      { id: "body", timing: { startTime: 0, endTime: 27, fixedDuration: 27 } },
+      { id: "close", timing: { startTime: 27, endTime: 30, fixedDuration: 3 } },
+    ]);
+  });
+
+  it("rejects a timing patch to a non-tail scene instead of creating overlap", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({ input: "Update", maxDurationSec: 12 }, {
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: { id: "first", templateId: "notification", variables: { message: "First" }, timing: { fixedDuration: 4 } },
+        };
+        yield {
+          type: "scene.add" as const,
+          scene: { id: "second", templateId: "notification", variables: { message: "Second" }, timing: { fixedDuration: 4 } },
+        };
+        yield { type: "scene.patch" as const, sceneId: "first", patch: { timing: { endTime: 10 } } };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.map(({ type }) => type)).toEqual([
+      "response.start",
+      "scene.add",
+      "scene.add",
+      "response.warning",
+      "response.complete",
+    ]);
+    expect(events[3]).toMatchObject({
+      type: "response.warning",
+      data: { warning: { code: "scene_patch_rejected_readability", sceneId: "first" } },
+    });
+    expect((await response.result).config?.scenes).toMatchObject([
+      { id: "first", timing: { startTime: 0, endTime: 4 } },
+      { id: "second", timing: { startTime: 4, endTime: 8 } },
+    ]);
+  });
+
+  it("rejects a variable patch that no longer fits the scene's readable slot", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({ input: "Update", maxDurationSec: 12 }, {
+      getTemplatePacing: () => ({
+        minDuration: 2,
+        preferredDuration: 3,
+        timing: { contentFields: ["message"], contentUnit: "words" },
+      }),
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: { id: "body", templateId: "notification", variables: { message: "Short" }, timing: { fixedDuration: 3 } },
+        };
+        yield {
+          type: "scene.patch" as const,
+          sceneId: "body",
+          patch: { variables: { message: "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty" } },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.map(({ type }) => type)).toEqual([
+      "response.start",
+      "scene.add",
+      "response.warning",
+      "response.complete",
+    ]);
+    expect(events[2]).toMatchObject({
+      type: "response.warning",
+      data: { warning: { code: "scene_patch_rejected_readability", sceneId: "body" } },
+    });
+    expect((await response.result).config?.scenes[0].variables).toEqual({ message: "Short" });
+  });
+
+  it("omits timing patches that move a scene away from its sequential start", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({ input: "Update", maxDurationSec: 10 }, {
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "body",
+            templateId: "notification",
+            variables: { message: "Body" },
+            timing: { fixedDuration: 4 },
+          },
+        };
+        yield {
+          type: "scene.patch" as const,
+          sceneId: "body",
+          patch: { timing: { startTime: 10, endTime: 12 } },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.map(({ type }) => type)).toEqual([
+      "response.start",
+      "scene.add",
+      "response.warning",
+      "response.complete",
+    ]);
+    expect(events[2]).toMatchObject({
+      type: "response.warning",
+      data: { warning: { code: "scene_patch_rejected_readability", sceneId: "body" } },
+    });
+  });
+
+  it("completes the partial response with length when the next scene starts at the ceiling", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({
+      input: "Update",
+      maxDurationSec: 5,
+      opening: "Complete opening",
+    }, {
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "too-late",
+            templateId: "notification",
+            variables: { message: "Too late" },
+            timing: { fixedDuration: 3 },
+          },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.map(({ type }) => type)).toEqual([
+      "response.start",
+      "scene.add",
+      "response.warning",
+      "response.complete",
+    ]);
+    expect(events[2]).toMatchObject({
+      type: "response.warning",
+      data: { warning: { code: "scene_omitted_unreadable", sceneId: "too-late" } },
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: "response.complete",
+      data: { finishReason: "length" },
+    });
+    await expect(response.result).resolves.toMatchObject({ status: "complete", finishReason: "length" });
+  });
+
+  it("returns a typed warning and terminal error when no readable scene can fit", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({ input: "Grounded but too long", maxDurationSec: 5 }, {
+      getTemplatePacing: () => ({ minDuration: 6, preferredDuration: 6 }),
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: { id: "impossible", templateId: "body", variables: {}, timing: { fixedDuration: 6 } },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.map(({ type }) => type)).toEqual([
+      "response.start",
+      "response.warning",
+      "response.error",
+    ]);
+    expect(events[1]).toMatchObject({
+      data: { warning: { code: "scene_omitted_unreadable", sceneId: "impossible" } },
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: "response.error",
+      data: { error: { message: expect.stringContaining("inspect recoverable errors and warnings") } },
+    });
+    await expect(response.result).resolves.toMatchObject({
+      status: "error",
+      warnings: [{ code: "scene_omitted_unreadable" }],
+    });
+  });
+
+  it("allocates or omits content-heavy scenes deterministically through the protocol", async () => {
+    const { createVideo } = await import("../src/internal");
+    const cases = [
+      {
+        id: "headline",
+        maxDurationSec: 8,
+        variables: { headline: "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen" },
+        timing: { contentFields: ["headline"], contentUnit: "words" as const },
+        expectedDuration: 5,
+      },
+      {
+        id: "body",
+        maxDurationSec: 8,
+        variables: { body: "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five twenty-six twenty-seven" },
+        timing: { contentFields: ["body"], contentUnit: "words" as const },
+        expectedDuration: 7,
+      },
+      {
+        id: "list",
+        maxDurationSec: 7,
+        variables: { items: ["one", "two", "three", "four", "five", "six"] },
+        timing: { contentFields: ["items"], contentUnit: "items" as const },
+        expectedDuration: undefined,
+      },
+      {
+        id: "data",
+        maxDurationSec: 8,
+        variables: { bars: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }] },
+        timing: { contentFields: ["bars"], contentUnit: "items" as const },
+        expectedDuration: 6,
+      },
+    ];
+
+    for (const fixture of cases) {
+      const run = async () => {
+        const response = createVideo({ input: "Grounded fixture", maxDurationSec: fixture.maxDurationSec }, {
+          requestId: `request-${fixture.id}`,
+          runId: `run-${fixture.id}`,
+          getTemplatePacing: () => ({ minDuration: 2, preferredDuration: 2, timing: fixture.timing }),
+          generate: async function* () {
+            yield {
+              type: "scene.add" as const,
+              scene: {
+                id: fixture.id,
+                templateId: fixture.id,
+                variables: fixture.variables,
+                timing: { fixedDuration: 2 },
+              },
+            };
+            yield { type: "plan.complete" as const };
+          },
+        });
+        const events = [];
+        for await (const event of response.stream) events.push(event);
+        return { events, state: await response.result };
+      };
+
+      const first = await run();
+      const second = await run();
+      expect(second.events, fixture.id).toEqual(first.events);
+      expect(second.state, fixture.id).toEqual(first.state);
+      expect(first.events[1], fixture.id).toMatchObject({
+        type: "response.warning",
+        data: { warning: { sceneId: fixture.id, category: "readability" } },
+      });
+      if (fixture.expectedDuration == null) {
+        expect(first.events.map(({ type }) => type), fixture.id).toEqual([
+          "response.start",
+          "response.warning",
+          "response.error",
+        ]);
+        expect(first.state.status, fixture.id).toBe("error");
+      } else {
+        expect(first.state.status, fixture.id).toBe("complete");
+        expect(first.state.config?.scenes[0].timing, fixture.id).toMatchObject({
+          startTime: 0,
+          endTime: fixture.expectedDuration,
+          fixedDuration: fixture.expectedDuration,
+        });
+        expect(first.state.config?.scenes[0].timing.endTime, fixture.id)
+          .toBeLessThanOrEqual(fixture.maxDurationSec);
+      }
+    }
+  });
+
+  it("asks the planner to distill substantial source material without padding or avoidable template repetition", async () => {
+    const { buildVideoUserPrompt } = await import("../src/internal");
+    const prompt = buildVideoUserPrompt({
+      input: "Activation is 58%. Enterprise adoption is 64%. SMB adoption is 49%.",
+      opening: "Here is your daily briefing.",
+    });
+
+    expect(prompt).toContain("Select the most decision-relevant grounded takeaways that fit the duration");
+    expect(prompt).toContain("For a long source, summarize instead of attempting to represent every fact");
+    expect(prompt).toContain("unless the creative instructions explicitly request complete fact coverage that fits the duration");
+    expect(prompt).toContain("Preserve qualifiers, units, denominators, ranges, and comparison direction");
+    expect(prompt).toContain("Choose the scene count from the distinct grounded material and the duration budget");
+    expect(prompt).toContain("continue beyond five when rich input warrants it");
+    expect(prompt).not.toContain("Aim for 3–5 generated body scenes");
+    expect(prompt).toContain("Use a different suitable template for each body scene");
+    expect(prompt).toContain("Never add filler to satisfy a count or diversity target");
+    expect(prompt).toContain("Never use media, ctaMedia, or reaction as the first generated body template");
+  });
+
+  it("does not tell the planner to discard facts when the application requests complete coverage", async () => {
+    const { buildVideoUserPrompt } = await import("../src/internal");
+    const prompt = buildVideoUserPrompt({
+      input: "Completed 142 conversations and received a 4.8 out of 5 rating.",
+      instructions: "Preserve every grounded fact exactly.",
+      maxDurationSec: 30,
+    });
+
+    expect(prompt).toContain("explicitly request complete fact coverage");
+    expect(prompt).toContain("4.8 out of 5");
+    expect(prompt).toContain("Preserve qualifiers, units, denominators, ranges, and comparison direction");
+  });
+
+  it("never asks a planner to commit unresolved media", async () => {
+    const { buildVideoUserPrompt } = await import("../src/internal");
+    const withoutMedia = buildVideoUserPrompt({ input: "A grounded update." });
+    expect(withoutMedia).toContain("Use asset-free templates");
+    expect(withoutMedia).toContain("Never emit mediaKeyword without a resolved mediaUrl");
+    expect(withoutMedia).not.toContain("Use relevant stock media");
+
+    const withMedia = buildVideoUserPrompt({
+      input: "A grounded update.",
+      suppliedMedia: [{ id: "screen", url: "https://cdn.example/screen.png", type: "image" }],
+    });
+    expect(withMedia).toContain("Select zero or more relevant opaque supplied-media references");
+    expect(withMedia).not.toContain("Every opaque supplied-media reference must appear verbatim");
+    expect(withMedia).toContain("https://vanillasky.invalid/supplied/media-1");
+    expect(withMedia).not.toContain("https://cdn.example/screen.png");
+  });
+
+  it("streams a complete provider-neutral response without a hosted service", async () => {
+    let sdk: typeof import("../src/internal") | undefined;
+    try {
+      sdk = await import("../src/internal");
+    } catch {
+      // The assertion below is the expected red phase before the core exists.
+    }
+    expect(sdk, "the standalone core entry point should exist").toBeDefined();
+    if (!sdk) return;
+
+    const response = sdk.createVideo(
+      {
+        input: "Activation increased from 41% to 58%.",
+        opening: "Your activation update is ready.",
+        brand: { name: "Acme", colors: { primary: "#6D5EF5" } },
+      },
+      {
+        requestId: "request-test",
+        runId: "run-test",
+        generate: async function* () {
+          yield {
+            type: "scene.add" as const,
+            scene: {
+              id: "metric",
+              templateId: "bigNumber",
+              variables: { value: 58, unit: "%", label: "activation" },
+              timing: { fixedDuration: 4 },
+            },
+          };
+          yield { type: "plan.complete" as const, finishReason: "stop" as const };
+        },
+      },
+    );
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+
+    expect(events.map((event) => event.type)).toEqual([
+      "response.start",
+      "scene.add",
+      "scene.add",
+      "response.complete",
+    ]);
+    const sceneEvents = events.filter((event) => event.type === "scene.add");
+    expect(sceneEvents[0]?.type === "scene.add" && sceneEvents[0].data.scene.timing)
+      .toEqual({ fixedDuration: 5, startTime: 0, endTime: 5 });
+    expect(sceneEvents[1]?.type === "scene.add" && sceneEvents[1].data.scene.timing)
+      .toEqual({ fixedDuration: 4, startTime: 5, endTime: 9 });
+    await expect(response.result).resolves.toMatchObject({
+      status: "complete",
+      config: { scenes: [{ timing: { startTime: 0, endTime: 5 } }, { timing: { startTime: 5, endTime: 9 } }] },
+    });
+  });
+
+  it("rejects an opening scene that the client did not negotiate before streaming starts", async () => {
+    const { createVideo } = await import("../src/internal");
+    expect(() => createVideo({
+      input: "Activation update",
+      opening: "Your video is getting ready.",
+    }, {
+      capabilities: { templates: ["bigNumber"] },
+      generate: async function* () { yield { type: "plan.complete" as const }; },
+    })).toThrow("Scene template notification was not negotiated");
+  });
+
+  it("validates the deterministic opening before streaming starts", async () => {
+    const { createVideo } = await import("../src/internal");
+    const validateScene = vi.fn(() => { throw new Error("opening schema rejected"); });
+
+    expect(() => createVideo({
+      input: "Activation update",
+      opening: "Your video is getting ready.",
+    }, {
+      capabilities: { templates: ["notification"] },
+      validateScene,
+      generate: async function* () { yield { type: "plan.complete" as const }; },
+    })).toThrow("opening schema rejected");
+    expect(validateScene).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "supplied-opening", templateId: "notification" }),
+      { input: expect.objectContaining({ opening: "Your video is getting ready." }), previousScenes: [] },
+    );
+  });
+
+  it("validates a generated scene before emitting it", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({ input: "Grounded facts" }, {
+      validateScene: () => { throw new Error("scene rejected"); },
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "invalid",
+            templateId: "testimonial",
+            variables: { quote: "Invented" },
+            timing: { fixedDuration: 4 },
+          },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.map(({ type }) => type)).toEqual(["response.start", "response.error"]);
+    expect(events.at(-1)).toMatchObject({
+      type: "response.error",
+      data: { error: { code: "generation_failed", message: "Video response generation failed" } },
+    });
+    expect(JSON.stringify(events)).not.toContain("scene rejected");
+  });
+
+  it("validates the merged scene before emitting a scene patch", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({ input: "Grounded facts" }, {
+      validateScene: (scene) => {
+        if ("undeclared" in scene.variables) throw new Error("undeclared variable rejected");
+      },
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "valid",
+            templateId: "notification",
+            variables: { message: "Grounded" },
+            timing: { fixedDuration: 4 },
+          },
+        };
+        yield {
+          type: "scene.patch" as const,
+          sceneId: "valid",
+          patch: { variables: { undeclared: "bypass" } },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.map(({ type }) => type)).toEqual(["response.start", "scene.add", "response.error"]);
+    expect(events.at(-1)).toMatchObject({
+      type: "response.error",
+      data: { error: { code: "generation_failed", message: "Video response generation failed" } },
+    });
+    expect(JSON.stringify(events)).not.toContain("undeclared variable rejected");
+  });
+
+  it("validates the merged scene before emitting an asset patch", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({
+      input: "Grounded facts",
+      suppliedMedia: [{ id: "approved", type: "image", url: "https://cdn.example/approved.png" }],
+    }, {
+      validateScene: (scene) => {
+        if (scene.variables.mediaUrl === "https://attacker.example/image.png") {
+          throw new Error("unauthorized media rejected");
+        }
+      },
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "valid",
+            templateId: "media",
+            variables: { mediaUrl: "https://cdn.example/approved.png" },
+            timing: { fixedDuration: 4 },
+          },
+        };
+        yield {
+          type: "asset.patch" as const,
+          sceneId: "valid",
+          variables: { mediaUrl: "https://attacker.example/image.png" },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.map(({ type }) => type)).toEqual(["response.start", "scene.add", "response.error"]);
+    expect(events.at(-1)).toMatchObject({
+      type: "response.error",
+      data: { error: { code: "generation_failed", message: "Video response generation failed" } },
+    });
+    expect(JSON.stringify(events)).not.toContain("unauthorized media rejected");
+  });
+
+  it("errors when truncation lands no generated scenes beyond the opening", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({
+      input: "Grounded facts",
+      opening: "Opening",
+    }, {
+      generate: async function* () {
+        yield { type: "plan.complete" as const, finishReason: "length" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.map(({ type }) => type)).toEqual(["response.start", "scene.add", "response.error"]);
+    expect(await response.result).toMatchObject({ status: "error" });
+  });
+
+  it("keeps a truncated response playable when a generated scene landed", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({
+      input: "Grounded facts",
+      opening: "Opening",
+    }, {
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "body",
+            templateId: "notification",
+            variables: { message: "Useful partial result" },
+            timing: { fixedDuration: 4 },
+          },
+        };
+        yield { type: "plan.complete" as const, finishReason: "length" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.at(-1)).toMatchObject({
+      type: "response.complete",
+      data: { finishReason: "length" },
+    });
+    expect(await response.result).toMatchObject({ status: "complete", finishReason: "length" });
+  });
+
+  it("rejects a generated template outside negotiated capabilities", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({ input: "Grounded facts" }, {
+      capabilities: { templates: ["notification"] },
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "outside-kit",
+            templateId: "testimonial",
+            variables: {},
+            timing: { fixedDuration: 4 },
+          },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.map(({ type }) => type)).toEqual(["response.start", "response.error"]);
+    expect(events.at(-1)).toMatchObject({
+      type: "response.error",
+      data: { error: { code: "generation_failed", message: "Video response generation failed" } },
+    });
+    expect(JSON.stringify(events)).not.toContain("not negotiated");
+  });
+});

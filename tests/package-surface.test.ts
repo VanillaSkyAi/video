@@ -1,0 +1,85 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const root = process.cwd();
+
+describe("public package surface", () => {
+  it("labels the package as a 0.1 beta video response SDK", () => {
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    const readme = readFileSync(join(root, "README.md"), "utf8");
+
+    expect(manifest.version).toBe("0.1.0");
+    expect(manifest.description).toMatch(/video response SDK/i);
+    expect(readme).toMatch(/Status: Beta/);
+  });
+
+  it("publishes only the supported entry points", () => {
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    const architecture = readFileSync(join(root, "docs/architecture.md"), "utf8");
+
+    expect(Object.keys(manifest.exports).sort()).toEqual([
+      ".",
+      "./react",
+      "./server",
+      "./templates",
+      "./templates/catalog",
+      "./test",
+    ]);
+    expect(manifest.bin).toEqual({ vanillasky: "bin/vanillasky.js" });
+    expect(architecture).toContain("`vanillasky create`, `add`, `sync`, `check`, `list`, and `describe`");
+    expect(architecture).toContain("The six small public package entry points");
+  });
+
+  it("does not advertise install-time build scripts in the published manifest", () => {
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+
+    expect(manifest.scripts.prepack).toBe("npm run build");
+    expect(manifest.scripts).not.toHaveProperty("prepare");
+    expect(manifest.scripts).not.toHaveProperty("verify:github-install");
+    expect(existsSync(join(root, "scripts/verify-github-install.mjs"))).toBe(false);
+  });
+
+  it("does not ship the removed bundled-audio payload or obsolete entry modules", () => {
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+
+    expect(manifest.files).not.toContain("audio");
+    expect(existsSync(join(root, "audio"))).toBe(false);
+    expect(existsSync(join(root, "src/audio"))).toBe(false);
+    for (const path of [
+      "src/acceptance.ts",
+      "src/config.ts",
+      "src/host.ts",
+      "src/server-node.ts",
+      "src/template-authoring.ts",
+    ]) {
+      expect(existsSync(join(root, path)), path).toBe(false);
+    }
+  });
+
+  it("keeps the website in its standalone repository and ships documentation only", () => {
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    const workflow = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8");
+    const eslintConfig = readFileSync(join(root, "eslint.config.js"), "utf8");
+    const gitignore = readFileSync(join(root, ".gitignore"), "utf8");
+
+    expect(existsSync(join(root, "site"))).toBe(false);
+    expect(existsSync(join(root, "wrangler.toml"))).toBe(false);
+    expect(Object.keys(manifest.scripts).filter((name) => name.startsWith("site:"))).toEqual([]);
+    expect(manifest.scripts["release:check"]).not.toContain("site:");
+    for (const maintainerFile of [
+      "docs/maintainers/acceptance.md",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "docs/maintainers/releasing.md",
+      "llms.txt",
+    ]) {
+      expect(manifest.files).not.toContain(maintainerFile);
+    }
+    expect(existsSync(join(root, "llms.txt"))).toBe(false);
+    expect(workflow).not.toMatch(/site:(?:install|build)/);
+    expect(eslintConfig).not.toContain("site/");
+    expect(gitignore).not.toContain("site/");
+    expect(existsSync(join(root, "docs/studio-handoff.md"))).toBe(false);
+  });
+});

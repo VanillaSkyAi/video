@@ -1,0 +1,95 @@
+[← Documentation home](../README.md) · [Previous: Core concepts](concepts.md) · [Next: Streaming protocol →](streaming-protocol.md)
+
+# Persistence and replay
+
+A completed `Video` is ordinary JSON owned by your application. VanillaSky
+does not provide a database or hosted media store. Save the value returned by
+`await video.generate(...)` with the platform-native `JSON.stringify`; there is
+no SDK serializer.
+
+Every stored video has `schemaVersion: "0.1"`. This storage version is separate
+from streaming protocol `0.4`. The 0.1 policy supports the current storage
+schema only: there are no compatibility aliases or implicit coercions.
+
+## Load at the storage boundary
+
+Treat values loaded from a database, object store, API, or file as `unknown`.
+Parse them before using them in application code:
+
+<!-- verify:persistence-example:start -->
+```tsx
+import { getVideoDuration, parseVideo } from "@vanillaskyai/video";
+import { VideoPlayer } from "@vanillaskyai/video/react";
+
+export function SavedVideo({ storedJson }: { storedJson: string }) {
+  const savedVideo = parseVideo(JSON.parse(storedJson));
+
+  return <>
+    <p>{getVideoDuration(savedVideo)} seconds</p>
+    <VideoPlayer video={savedVideo} autoPlay={false} />
+  </>;
+}
+```
+<!-- verify:persistence-example:end -->
+
+The release verifier compiles this exact documented snippet against the packed
+SDK artifact, including its root and React subpath imports.
+
+`parseVideo(value: unknown)` validates the complete shape, known fields,
+resolved brand and style, audio, metadata, unique scenes, timing, and JSON-safe
+template variables. It returns a detached, deeply frozen `Video`, so later
+changes to the loaded object cannot mutate player state.
+
+Invalid data throws `VideoValidationError` with `code: "invalid_video"`.
+Unknown or future storage versions throw the same error class with
+`code: "unsupported_video_version"`. `<VideoPlayer video={value} />` repeats
+this boundary validation and rejects the entire value before any renderer
+runs; it never renders a partial future document.
+
+## Retention
+
+By default, completed snapshots omit raw source, creative instructions, and
+the supplied-media URL index. A customer-owned route may retain individual
+fields only when its privacy and deletion policy allows it:
+
+```ts
+createVideoHandler({
+  authorize: verifySession,
+  streamText,
+  snapshotRetention: {
+    source: true,
+    instructions: true,
+    suppliedMediaUrls: true,
+  },
+});
+```
+
+Opt-in values are bounded in the snapshot:
+
+- source: 16,384 characters;
+- instructions: 4,096 characters;
+- supplied-media index: 16 URLs, each at most 2,048 characters.
+
+These metadata limits do not replace a host retention policy. Renderable scene
+variables may still contain a media URL when that asset is necessary for
+replay. Store only approved assets and avoid signed URLs whose lifetime is
+shorter than the replay window.
+
+## Storage ownership
+
+The host owns the database, object storage, tenant authorization, encryption,
+deletion schedule, backups, quotas, and media URL expiry. Persist the final
+`Video` document atomically with your own tenant and record identifiers. Do not
+use the protocol checksum as an authorization or tenancy control.
+
+The checksum on `response.complete` is a deterministic, non-cryptographic
+drift detector. It is not proof of authenticity and is not a signature. Use
+normal authenticated storage and a cryptographic integrity mechanism when
+those properties are required.
+
+Saved replay makes zero generation endpoint or model-provider requests. It is
+not necessarily zero network traffic: audio, images, videos, fonts, and
+customer-owned renderers may make separate media network requests.
+
+When a saved video uses project-owned templates, provide the matching browser
+registry: `<VideoPlayer video={savedVideo} templates={templates} />`.
