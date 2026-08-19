@@ -42,9 +42,9 @@ describe("packed provider package compatibility", () => {
     expect(verifier).toContain('mode: "fixture-only"');
   });
 
-  it("uses the declared npm CLI for every CI job that installs provider fixtures", () => {
-    expect(ciWorkflow.match(/Install the locked npm CLI/g)).toHaveLength(4);
-    expect(ciWorkflow.match(/npm install --global npm@11\.17\.0/g)).toHaveLength(4);
+  it("uses the declared npm CLI in every parallel CI job", () => {
+    expect(ciWorkflow.match(/Install the locked npm CLI/g)).toHaveLength(6);
+    expect(ciWorkflow.match(/npm install --global npm@11\.17\.0/g)).toHaveLength(6);
   });
 
   it("clears every supported real provider key before creating child environments", () => {

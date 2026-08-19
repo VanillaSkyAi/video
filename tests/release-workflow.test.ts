@@ -165,12 +165,25 @@ describe("release workflow", () => {
   it("pins every CI action to the reviewed v7 commit", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
     const actions = [...workflow.matchAll(/uses:\s+(actions\/(?:checkout|setup-node))@([^\s]+)/g)];
-    expect(actions).toHaveLength(8);
+    expect(actions).toHaveLength(12);
     for (const [, action, revision] of actions) {
       expect(revision, action).toMatch(/^[a-f0-9]{40}$/);
     }
     expect(workflow).toContain("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1");
     expect(workflow).toContain("actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0");
+  });
+
+  it("parallelizes expensive consumer gates and installs all browsers once", () => {
+    const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+
+    expect(workflow).toContain("consumer-compatibility:");
+    expect(workflow).toContain("provider-compatibility:");
+    expect(workflow).toMatch(/consumer-compatibility:[\s\S]*?npm run verify:onboarding/);
+    expect(workflow).toMatch(/provider-compatibility:[\s\S]*?npm run verify:nextjs/);
+    expect(workflow.match(/npx playwright install --with-deps chromium firefox webkit/g)).toHaveLength(1);
+    expect(workflow.match(/npx playwright test(?:\s|$)/g)).toHaveLength(1);
+    expect(workflow).not.toContain("matrix.browser");
+    expect(workflow.match(/timeout-minutes:/g)).toHaveLength(6);
   });
 
   it("compiles the source-owned template tree in the clean-room consumer", () => {
