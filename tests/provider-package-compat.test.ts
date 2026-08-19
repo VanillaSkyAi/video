@@ -7,6 +7,7 @@ const verifier = readFileSync(
   resolve(root, "scripts", "verify-nextjs-onboarding.mjs"),
   "utf8",
 );
+const ciWorkflow = readFileSync(resolve(root, ".github", "workflows", "ci.yml"), "utf8");
 
 describe("packed provider package compatibility", () => {
   it("pins the real Google, OpenRouter, and AI SDK packages without changing SDK dependencies", () => {
@@ -39,6 +40,11 @@ describe("packed provider package compatibility", () => {
     expect(verifier).toContain("provider-compatibility-locks.json");
     expect(verifier).toContain("expectation.fixtureOnly !== true");
     expect(verifier).toContain('mode: "fixture-only"');
+  });
+
+  it("uses the declared npm CLI for every CI job that installs provider fixtures", () => {
+    expect(ciWorkflow.match(/Install the locked npm CLI/g)).toHaveLength(4);
+    expect(ciWorkflow.match(/npm install --global npm@11\.17\.0/g)).toHaveLength(4);
   });
 
   it("clears every supported real provider key before creating child environments", () => {
