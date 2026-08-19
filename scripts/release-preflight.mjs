@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertFirstReleasePreflight } from "./lib/release-preflight.mjs";
+import { assertReleasePreflight } from "./lib/release-preflight.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -22,7 +22,7 @@ if (![0, 2].includes(remoteTag.status ?? -1)) {
   throw new Error(`Unable to prove remote tag ${tag} is absent; verify origin connectivity and try again`);
 }
 
-const result = assertFirstReleasePreflight({
+const result = assertReleasePreflight({
   currentBranch: git("branch", "--show-current"),
   expectedRepository: "VanillaSkyAi/video",
   head: git("rev-parse", "HEAD"),
@@ -36,4 +36,4 @@ const result = assertFirstReleasePreflight({
   version: manifest.version,
 });
 
-console.log(`First release preflight passed: ${result.repository} ${result.tag} ${result.commit}`);
+console.log(`Release preflight passed: ${result.repository} ${result.tag} ${result.commit}`);
