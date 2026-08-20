@@ -177,17 +177,136 @@ describe("public API surface verifier", () => {
     expect(() => assertPatchCompatibility(input)).toThrow(/narrowed Node engine.*>=20.*>=22/i);
   });
 
-  it("leaves an intentional pre-1.0 minor change to the release-note gate", async () => {
+  it("accepts a compatible pre-1.0 minor without migration evidence", async () => {
+    const { assertPatchCompatibility } = await import("../scripts/lib/public-api-surface.mjs");
+    const input = compatiblePatchInput();
+    input.candidateVersion = "0.2.0";
+
+    expect(assertPatchCompatibility(input)).toEqual({
+      baseline: "0.1.0",
+      candidate: "0.2.0",
+      status: "compatible-minor",
+    });
+  });
+
+  it("rejects an undocumented breaking pre-1.0 minor", async () => {
     const { assertPatchCompatibility } = await import("../scripts/lib/public-api-surface.mjs");
     const input = compatiblePatchInput();
     input.candidateVersion = "0.2.0";
     input.candidateManifest.exports = {};
 
-    expect(assertPatchCompatibility(input)).toEqual({
-      baseline: "0.1.0",
-      candidate: "0.2.0",
-      status: "different-minor",
+    expect(() => assertPatchCompatibility(input)).toThrow(/breaking.*pre-1\.0 minor.*evidence/i);
+  });
+
+  it("accepts a documented breaking pre-1.0 minor", async () => {
+    const { assertPatchCompatibility } = await import("../scripts/lib/public-api-surface.mjs");
+    const input = compatiblePatchInput();
+    input.candidateVersion = "0.2.0";
+    input.candidateManifest.exports = {};
+
+    expect(assertPatchCompatibility({
+      ...input,
+      releaseIntent: {
+        releaseType: "minor",
+        evidence: [{
+          source: "CHANGELOG.md#0.2.0",
+          body: [
+            "Remove the root parser export.",
+            "",
+            "### Breaking changes",
+            "Replace the removed root entry with the scoped entry:",
+            "```ts",
+            "import { parseVideo } from '@vanillaskyai/video';",
+            "```",
+            "### Adoption",
+            "Adopt the replacement entry:",
+            "```ts",
+            "import { parseVideo } from '@vanillaskyai/video/server';",
+            "```",
+          ].join("\n"),
+        }],
+      },
+    })).toMatchObject({
+      status: "documented-breaking-minor",
+      evidence: "CHANGELOG.md#0.2.0",
     });
+  });
+
+  it("accepts a documented future minor while a feature PR retains npm latest version", async () => {
+    const { assertPatchCompatibility } = await import("../scripts/lib/public-api-surface.mjs");
+    const input = compatiblePatchInput();
+    input.candidateVersion = input.baselineVersion;
+    input.candidateManifest.exports = {};
+
+    expect(assertPatchCompatibility({
+      ...input,
+      releaseIntent: {
+        releaseType: "minor",
+        evidence: [{
+          source: ".changeset/remove-root.md",
+          body: [
+            "Remove the root parser export.",
+            "",
+            "### Breaking changes",
+            "Before:",
+            "```ts",
+            "import { parseVideo } from '@vanillaskyai/video';",
+            "```",
+            "### Adoption",
+            "After:",
+            "```ts",
+            "import { parseVideo } from '@vanillaskyai/video/server';",
+            "```",
+          ].join("\n"),
+        }],
+      },
+    })).toMatchObject({ status: "documented-breaking-minor" });
+  });
+
+  it("does not let patch release intent authorize a breaking change", async () => {
+    const { assertPatchCompatibility } = await import("../scripts/lib/public-api-surface.mjs");
+    const input = compatiblePatchInput();
+    input.candidateManifest.exports = {};
+
+    expect(() => assertPatchCompatibility({
+      ...input,
+      releaseIntent: {
+        releaseType: "patch",
+        evidence: [{
+          source: ".changeset/breaking-patch.md",
+          body: "### Breaking changes\n```ts\nbefore()\n```\n### Adoption\n```ts\nafter()\n```",
+        }],
+      },
+    })).toThrow(/patch candidate.*removed package export/i);
+  });
+
+  it("requires concrete fenced before and after examples for a breaking minor", async () => {
+    const { assertPatchCompatibility } = await import("../scripts/lib/public-api-surface.mjs");
+    const input = compatiblePatchInput();
+    input.candidateVersion = "0.2.0";
+    input.candidateManifest.exports = {};
+
+    expect(() => assertPatchCompatibility({
+      ...input,
+      releaseIntent: {
+        releaseType: "minor",
+        evidence: [{
+          source: "CHANGELOG.md#0.2.0",
+          body: "Remove the root parser export.\n\n### Breaking changes\nDescribe the old API.\n### Adoption\nDescribe the new API.",
+        }],
+      },
+    })).toThrow(/Breaking changes.*fenced.*Adoption.*fenced/is);
+  });
+
+  it("preserves the patch exception for experimental exports", async () => {
+    const { assertPatchCompatibility } = await import("../scripts/lib/public-api-surface.mjs");
+    const input = compatiblePatchInput();
+    input.baselineSignatures.root.exports.experimental_preview = {
+      kinds: ["value"],
+      declaration: ["export declare function experimental_preview(): string;"],
+    };
+
+    expect(assertPatchCompatibility(input)).toMatchObject({ status: "compatible-patch" });
   });
 
   it("still compares the published contract when the candidate is already npm latest", async () => {

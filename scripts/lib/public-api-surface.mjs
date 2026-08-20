@@ -3,6 +3,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
+import { findBreakingChangeEvidence } from "./compatibility-release-intent.mjs";
 import { compareSemver, parseSemver } from "./release-integrity.mjs";
 
 const NODE_BUILTINS = new Set([
@@ -351,6 +352,7 @@ export function assertPatchCompatibility({
   candidateManifest,
   baselineSignatures,
   candidateSignatures,
+  releaseIntent,
 }) {
   const baselineSemver = parseSemver(baselineVersion);
   const candidateSemver = parseSemver(candidateVersion);
@@ -358,62 +360,108 @@ export function assertPatchCompatibility({
   if (versionComparison < 0) {
     throw new Error(`Patch candidate ${candidateVersion} must be newer than npm latest ${baselineVersion}`);
   }
-  if (baselineSemver.core[0] !== candidateSemver.core[0]
-    || baselineSemver.core[1] !== candidateSemver.core[1]) {
-    return { baseline: baselineVersion, candidate: candidateVersion, status: "different-minor" };
-  }
+  const breakingChanges = [];
   for (const entry of Object.keys(baselineManifest.exports ?? {})) {
     if (!Object.hasOwn(candidateManifest.exports ?? {}, entry)) {
-      throw new Error(`Patch candidate removed package export ${entry}`);
+      breakingChanges.push(`removed package export ${entry}`);
     }
   }
   const baselineNodeEngine = baselineManifest.engines?.node;
   const candidateNodeEngine = candidateManifest.engines?.node;
   if (baselineNodeEngine && candidateNodeEngine
     && !peerRangeIncludes(candidateNodeEngine, baselineNodeEngine)) {
-    throw new Error(`Patch candidate narrowed Node engine from ${baselineNodeEngine} to ${candidateNodeEngine}`);
+    breakingChanges.push(`narrowed Node engine from ${baselineNodeEngine} to ${candidateNodeEngine}`);
   }
   for (const [peer, baselineRange] of Object.entries(baselineManifest.peerDependencies ?? {})) {
     const candidateRange = candidateManifest.peerDependencies?.[peer];
     if (!peerRangeIncludes(candidateRange, baselineRange)) {
-      throw new Error(`Patch candidate changed peer dependency ${peer} from ${baselineRange} to ${candidateRange ?? "removed"}`);
+      breakingChanges.push(`changed peer dependency ${peer} from ${baselineRange} to ${candidateRange ?? "removed"}`);
     }
     const baselineMeta = baselineManifest.peerDependenciesMeta?.[peer] ?? {};
     const candidateMeta = candidateManifest.peerDependenciesMeta?.[peer] ?? {};
     if (JSON.stringify(candidateMeta) !== JSON.stringify(baselineMeta)) {
-      throw new Error(`Patch candidate changed peer dependency metadata for ${peer}`);
+      breakingChanges.push(`changed peer dependency metadata for ${peer}`);
     }
   }
   for (const peer of Object.keys(candidateManifest.peerDependencies ?? {})) {
     if (Object.hasOwn(baselineManifest.peerDependencies ?? {}, peer)) continue;
     if (candidateManifest.peerDependenciesMeta?.[peer]?.optional !== true) {
-      throw new Error(`Patch candidate added new required peer dependency ${peer}`);
+      breakingChanges.push(`added new required peer dependency ${peer}`);
     }
   }
   for (const [entryName, baselineEntry] of Object.entries(baselineSignatures ?? {})) {
     const candidateEntry = candidateSignatures?.[entryName];
-    if (!candidateEntry) throw new Error(`Patch candidate removed public entry ${entryName}`);
+    if (!candidateEntry) {
+      breakingChanges.push(`removed public entry ${entryName}`);
+      continue;
+    }
     for (const [exportName, baselineSignature] of Object.entries(baselineEntry.exports ?? {})) {
       if (exportName.startsWith("experimental_")) continue;
       const candidateSignature = candidateEntry.exports?.[exportName];
       if (!candidateSignature) {
-        throw new Error(`Patch candidate removed public signature ${entryName}.${exportName}`);
+        breakingChanges.push(`removed public signature ${entryName}.${exportName}`);
+        continue;
       }
       if (JSON.stringify(candidateSignature) !== JSON.stringify(baselineSignature)) {
-        throw new Error(`Patch candidate changed public signature ${entryName}.${exportName}`);
+        breakingChanges.push(`changed public signature ${entryName}.${exportName}`);
       }
     }
     const candidateSupport = new Set(candidateEntry.support ?? []);
     for (const declaration of baselineEntry.support ?? []) {
       if (!candidateSupport.has(declaration)) {
-        throw new Error(`Patch candidate changed public signature support for ${entryName}`);
+        breakingChanges.push(`changed public signature support for ${entryName}`);
+        break;
       }
     }
+  }
+
+  const sameMajor = baselineSemver.core[0] === candidateSemver.core[0];
+  const sameMinor = sameMajor && baselineSemver.core[1] === candidateSemver.core[1];
+  const preOneMinor = baselineSemver.core[0] === "0"
+    && candidateSemver.core[0] === "0"
+    && baselineSemver.core[1] !== candidateSemver.core[1];
+  const pendingPreOneMinor = versionComparison === 0
+    && baselineSemver.core[0] === "0"
+    && releaseIntent?.releaseType === "minor";
+
+  if (breakingChanges.length > 0) {
+    if (preOneMinor || pendingPreOneMinor) {
+      const evidence = findBreakingChangeEvidence(releaseIntent);
+      if (!evidence) {
+        throw new Error(
+          "Breaking public API changes in a pre-1.0 minor require release evidence: "
+          + "start with one plain summary line and a blank line; then the exact Breaking changes "
+          + "section must contain one concrete fenced before example, and the exact Adoption "
+          + "section must contain one concrete fenced after example. "
+          + `Detected: ${breakingChanges.join("; ")}`,
+        );
+      }
+      return {
+        baseline: baselineVersion,
+        candidate: candidateVersion,
+        status: "documented-breaking-minor",
+        evidence,
+      };
+    }
+    if (sameMajor) {
+      throw new Error(`Patch candidate ${breakingChanges.join("; ")}`);
+    }
+    return {
+      baseline: baselineVersion,
+      candidate: candidateVersion,
+      status: "breaking-major",
+    };
   }
   return {
     baseline: baselineVersion,
     candidate: candidateVersion,
-    status: versionComparison === 0 ? "current-version" : "compatible-patch",
+    status: versionComparison === 0
+      ? "current-version"
+      : sameMinor
+        ? "compatible-patch"
+        : preOneMinor
+          ? "compatible-minor"
+          : "compatible-major",
   };
 }
 

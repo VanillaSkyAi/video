@@ -18,8 +18,18 @@ public API review.
 
 - `0.1.x` patch releases do not make breaking changes to documented APIs or the
   serialized `Video` schema.
-- A later `0.x` minor may make a breaking change only with release notes and a
-  concrete adoption example.
+- A compatible later `0.x` minor needs no migration ceremony. A breaking
+  pre-1.0 minor requires either its package-targeting `minor` Changeset (on a
+  feature PR) or its generated candidate changelog section (on the Version
+  Packages PR) to contain both `### Breaking changes` and `### Adoption`.
+  Those sections must include concrete fenced before and after code examples,
+  respectively. Start a breaking Changeset with its one-line summary, followed
+  by those headings, so Changesets preserves both as real headings in the
+  generated changelog. The verifier accepts the configured Changesets
+  changelog's canonical two-space continuation indentation, but not headings
+  hidden inside code fences. On a feature PR, only a Changeset added since the
+  pull request's exact base commit can provide this evidence. A `patch`
+  Changeset never authorizes a breaking change.
 - An API prefixed with `experimental_` may change in a patch. Canonical examples
   must pin an exact package version when they use one.
 - Deprecated APIs remain usable until the next minor release. The `0.1`
@@ -30,13 +40,15 @@ public API review.
 - Framework adapters are examples, not separate public APIs. The release suite
   verifies current Next.js and Vite production builds.
 
-The automated patch comparison is intentionally conservative. It requires
-exact equality for every existing normalized declaration and reachable support
-declaration because this report cannot distinguish input and output positions
-safely. As a result, even optional field additions to an existing public type
-fail the patch gate; use a pre-1.0 minor release unless a separately reviewed,
-direction-aware compatibility check can prove the change safe. New exports,
-wider supported peer ranges, and new optional peers remain additive.
+The automated npm comparison runs for every candidate, including a feature PR
+whose package version still equals npm `latest` and a Version Packages PR whose
+Changesets have already been consumed. It is intentionally conservative: every
+existing normalized declaration and reachable support declaration must remain
+exactly equal because the report cannot safely distinguish input and output positions.
+As a result, even optional field additions to an existing public
+type fail a patch gate; use a documented pre-1.0 minor unless a separately
+reviewed, direction-aware compatibility check can prove the change safe. New
+exports, wider supported peer ranges, and new optional peers remain additive.
 
 ## Environment boundaries
 
