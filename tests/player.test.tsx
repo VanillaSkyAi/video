@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import { createElement, StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { VideoValidationError, type Video } from "../src/index";
-import { createVideo } from "../src/internal";
+import { createVideo, createVideoEventFactory } from "../src/internal";
 import { createRenderTemplateRegistry, defineTemplate } from "../src/visual-system/catalog/internal";
 import { TEST_VIDEO_STYLE } from "./semantic-brand-fixture";
 
@@ -173,26 +173,33 @@ describe("VideoPlayer", () => {
     let releasePlanner!: () => void;
     const plannerGate = new Promise<void>((resolve) => { releasePlanner = resolve; });
     const { VideoPlayer } = await import("../src/player/video-player");
-    const response = createVideo({
-      input: "Quarterly activation improved from 41% to 58%.",
+    const events = createVideoEventFactory({ runId: "run-generation-cover" });
+    const style = {
+      ...TEST_VIDEO_STYLE,
       brand: {
+        ...TEST_VIDEO_STYLE.brand,
         name: "Acme",
         font: "Inter",
-        background: { colors: ["#241F54", "#17122F"] },
+        background: { type: "gradient" as const, colors: ["#241F54", "#17122F"] as [string, string] },
       },
-    }, {
-      generate: async function* () {
+    };
+    const stream = (async function* () {
+        yield events.create("response.start", {
+          requestId: "request-generation-cover",
+          format: { orientation: "portrait" },
+          style,
+          meta: { name: "Video response" },
+        });
         await plannerGate;
-        yield {
-          type: "scene.add" as const,
-          scene: { id: "one", templateId: "customer", variables: {}, timing: { fixedDuration: 1 } },
-        };
-        yield { type: "plan.complete" as const };
-      },
-    });
+        yield events.create("scene.add", {
+          scene: { id: "one", templateId: "customer", variables: {}, timing: { fixedDuration: 1, startTime: 0, endTime: 1 } },
+          position: 0,
+          revision: 0,
+        });
+    })();
     const view = render(createElement(VideoPlayer, {
       templates: createRenderTemplateRegistry({ templates: [] }),
-      stream: response.stream,
+      stream,
       width: 360,
       playbackMode: "manual",
     }));
@@ -243,7 +250,7 @@ describe("VideoPlayer", () => {
     expect(poster.getAttribute("data-motion-progress")).toBe("0.700");
   });
 
-  it("arms sound playback from the generation cover and starts when scene one arrives", async () => {
+  it("starts the default opening with sound before the planner body arrives", async () => {
     const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     let releaseFirstScene!: () => void;
@@ -275,39 +282,21 @@ describe("VideoPlayer", () => {
     const player = view.getByTestId("video-player");
 
     await waitFor(() => expect(view.container.querySelector("audio")).not.toBeNull());
-    expect(view.getByTestId("video-generation-cover")).toBeDefined();
+    await waitFor(() => expect(player.getAttribute("data-scenes")).toBe("1"));
+    expect(view.queryByTestId("video-generation-cover")).toBeNull();
+    expect(view.container.querySelector('[data-template-id="media"]')).not.toBeNull();
+    await waitFor(() => expect(view.container.textContent).toContain("Creating your video..."));
     fireEvent.click(view.getByRole("button", { name: "Play video with sound" }));
     expect(play).toHaveBeenCalled();
-    expect(player.getAttribute("data-start-requested")).toBe("true");
-    expect(player.getAttribute("data-intro-playing")).toBe("true");
     expect(player.getAttribute("data-playing")).toBe("true");
-    expect(view.queryByText("Starts when the first scene is ready…")).toBeNull();
-
-    const nativeSetTimeout = globalThis.setTimeout;
-    let releaseIntro: (() => void) | undefined;
-    let introDelay = 0;
-    vi.spyOn(globalThis, "setTimeout").mockImplementation(((callback: TimerHandler, delay?: number, ...args: unknown[]) => {
-      if (typeof callback === "function" && typeof delay === "number" && delay >= 2_900) {
-        releaseIntro = callback as () => void;
-        introDelay = delay;
-        return 1 as unknown as ReturnType<typeof setTimeout>;
-      }
-      return nativeSetTimeout(callback, delay, ...args);
-    }) as typeof setTimeout);
+    expect(player.getAttribute("data-generation-intro-complete")).toBe("true");
+    expect(player.getAttribute("data-intro-playing")).toBe("false");
 
     releaseFirstScene();
-    await waitFor(() => expect(player.getAttribute("data-scenes")).toBe("1"));
-    expect(view.getByTestId("video-generation-cover")).toBeDefined();
-    expect(player.getAttribute("data-current-time")).toBe("0.000");
-    expect(introDelay).toBeGreaterThanOrEqual(2_900);
-    act(() => releaseIntro?.());
-    await waitFor(() => expect(player.getAttribute("data-playing")).toBe("true"));
-    await waitFor(() => expect(view.queryByTestId("video-generation-cover")).toBeNull());
-    expect(player.getAttribute("data-current-time")).toBe("0.000");
-    expect(player.getAttribute("data-start-poster")).toBe("false");
+    await waitFor(() => expect(player.getAttribute("data-scenes")).toBe("2"));
   });
 
-  it("keeps the generation intro visible after scene one arrives and starts it with sound", async () => {
+  it("keeps the default opening visible while later body scenes stream", async () => {
     const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     let releasePlanner!: () => void;
@@ -338,23 +327,25 @@ describe("VideoPlayer", () => {
     }));
     const player = view.getByTestId("video-player");
 
-    await waitFor(() => expect(player.getAttribute("data-scenes")).toBe("1"));
+    await waitFor(() => expect(player.getAttribute("data-scenes")).toBe("2"));
     expect(player.getAttribute("data-status")).toBe("streaming");
     expect(player.getAttribute("data-current-time")).toBe("0.000");
     expect(player.getAttribute("data-playing")).toBe("false");
-    expect(view.getByTestId("video-generation-cover")).toBeDefined();
+    expect(view.queryByTestId("video-generation-cover")).toBeNull();
+    expect(view.container.querySelector('[data-template-id="media"]')).not.toBeNull();
+    await waitFor(() => expect(view.container.textContent).toContain("Creating your video..."));
     expect(view.container.querySelector("audio")?.muted).toBe(false);
     expect(view.getAllByRole("button", { name: "Play video with sound" })).toHaveLength(1);
 
     fireEvent.click(view.getByRole("button", { name: "Play video with sound" }));
     expect(play).toHaveBeenCalled();
     await waitFor(() => expect(player.getAttribute("data-playing")).toBe("true"));
-    expect(player.getAttribute("data-intro-playing")).toBe("true");
-    expect(view.getByTestId("video-generation-cover")).toBeDefined();
+    expect(player.getAttribute("data-intro-playing")).toBe("false");
+    expect(view.queryByTestId("video-generation-cover")).toBeNull();
     releasePlanner();
   });
 
-  it("uses the supplied gradient opening as the poster and starts it with sound", async () => {
+  it("uses the default gradient opening as the poster and starts it with sound", async () => {
     const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     let releasePlanner!: () => void;
@@ -362,7 +353,6 @@ describe("VideoPlayer", () => {
     const { VideoPlayer } = await import("../src/player/video-player");
     const response = createVideo({
       input: "Activation improved from 41% to 58%.",
-      opening: "Your activation update is ready.",
       audio: { src: "data:audio/wav;base64,UklGRg==" },
     }, {
       generate: async function* () {
@@ -380,7 +370,7 @@ describe("VideoPlayer", () => {
     await waitFor(() => expect(player.getAttribute("data-scenes")).toBe("1"));
     expect(view.queryByTestId("video-generation-cover")).toBeNull();
     expect(view.container.querySelector('[data-template-id="media"]')).not.toBeNull();
-    expect(view.container.textContent).toContain("Your activation update is ready.");
+    await waitFor(() => expect(view.container.textContent).toContain("Creating your video..."));
     expect(player.getAttribute("data-current-time")).toBe("0.000");
     expect(player.getAttribute("data-start-poster")).toBe("true");
     const start = view.getByRole("button", { name: "Play video with sound" });
@@ -610,7 +600,7 @@ describe("VideoPlayer", () => {
     await waitFor(() => {
       expect(player.getAttribute("data-playing")).toBe("false");
       expect(player.getAttribute("data-ended")).toBe("true");
-      expect(player.getAttribute("data-current-time")).toBe("3.000");
+      expect(player.getAttribute("data-current-time")).toBe("4.000");
     });
 
     const replay = view.getByRole("button", { name: "Replay video response" });

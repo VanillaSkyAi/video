@@ -22,7 +22,8 @@ or export pipeline when an encoded file is required.
   short, but the planner is designed to distill larger sources into a concise
   video rather than represent every fact;
 - `instructions`: optional creative direction that cannot override facts;
-- `opening`: optional copy for a deterministic opening that can play immediately;
+- `opening`: optional custom copy for the deterministic opening; omission uses
+  `Creating your video...`;
 - `personalization`: application-defined fields such as name, role, account,
   period, goal, or onboarding partner;
 - `brand`: an optional background preset plus name, logo, font, surfaces, and

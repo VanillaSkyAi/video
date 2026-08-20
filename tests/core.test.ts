@@ -143,7 +143,7 @@ describe("video response core", () => {
     expect(observedPrompt).not.toContain(privateUrl);
     expect(observedPrompt).not.toContain("private-customer-bytes");
     expect(validatedUrl).toBe(privateUrl);
-    expect(state.config?.scenes[0].variables.mediaUrl).toBe(privateUrl);
+    expect(state.config?.scenes.find(({ id }) => id === "media")?.variables.mediaUrl).toBe(privateUrl);
   });
 
   it("recovers content held for a closer when the planner emits no closer", async () => {
@@ -170,12 +170,15 @@ describe("video response core", () => {
     for await (const event of response.stream) events.push(event);
     expect(events.filter(({ type }) => type === "scene.add").map((event) =>
       event.type === "scene.add" ? event.data.scene.id : ""
-    )).toEqual(["body-1", "body-2"]);
+    )).toEqual(["supplied-opening", "body-1", "body-2"]);
     expect(events.some((event) => event.type === "response.warning" &&
       event.data.warning.code === "scene_omitted_for_closer")).toBe(false);
     expect(events.at(-1)).toMatchObject({
       type: "response.complete",
-      data: { finishReason: "stop", snapshot: { scenes: [{ id: "body-1" }, { id: "body-2" }] } },
+      data: {
+        finishReason: "stop",
+        snapshot: { scenes: [{ id: "supplied-opening" }, { id: "body-1" }, { id: "body-2" }] },
+      },
     });
   });
 
@@ -187,7 +190,7 @@ describe("video response core", () => {
       "body-3": 1,
       close: 3,
     };
-    const response = createVideo({ input: "Three ordered grounded points.", maxDurationSec: 12 }, {
+    const response = createVideo({ input: "Three ordered grounded points.", maxDurationSec: 15 }, {
       capabilities: { templates: Object.keys(durations) },
       getTemplatePacing: (id) => ({
         jobs: id === "close" ? ["ask"] : ["claim"],
@@ -207,7 +210,7 @@ describe("video response core", () => {
 
     for await (const _event of response.stream) { /* consume */ }
     expect((await response.result).config?.scenes.map(({ id }) => id))
-      .toEqual(["body-1", "body-2", "body-3"]);
+      .toEqual(["supplied-opening", "body-1", "body-2", "body-3"]);
   });
 
   it("treats supplied media as an optional approved pool", async () => {
@@ -284,10 +287,10 @@ describe("video response core", () => {
     const events = [];
     for await (const event of response.stream) events.push(event);
     expect(events.at(-1)).toMatchObject({ type: "response.complete" });
-    expect((await response.result).config?.scenes[0].timing).toMatchObject({
-      startTime: 0,
+    expect((await response.result).config?.scenes[1].timing).toMatchObject({
+      startTime: 3,
       endTime: 10,
-      fixedDuration: 10,
+      fixedDuration: 7,
     });
   });
 
@@ -317,16 +320,18 @@ describe("video response core", () => {
     expect(events.map(({ type }) => type)).toEqual([
       "response.start",
       "scene.add",
+      "scene.add",
       "response.warning",
       "scene.patch",
       "scene.add",
       "response.complete",
     ]);
-    expect(events[2]).toMatchObject({
+    expect(events[3]).toMatchObject({
       data: { warning: { code: "scene_duration_adjusted", sceneId: "body" } },
     });
     expect((await response.result).config?.scenes).toMatchObject([
-      { id: "body", timing: { startTime: 0, endTime: 27, fixedDuration: 27 } },
+      { id: "supplied-opening", timing: { startTime: 0, endTime: 3, fixedDuration: 3 } },
+      { id: "body", timing: { startTime: 3, endTime: 27, fixedDuration: 24 } },
       { id: "close", timing: { startTime: 27, endTime: 30, fixedDuration: 3 } },
     ]);
   });
@@ -350,7 +355,7 @@ describe("video response core", () => {
     for await (const event of response.stream) events.push(event);
     expect(events.filter(({ type }) => type === "scene.add").map((event) =>
       event.type === "scene.add" ? event.data.scene.id : ""
-    )).toEqual(["body-1", "body-2", "close"]);
+    )).toEqual(["supplied-opening", "body-1", "body-2", "close"]);
     expect((await response.result).config?.scenes.at(-1)?.templateId).toBe("close");
   });
 
@@ -373,7 +378,7 @@ describe("video response core", () => {
     const events = [];
     for await (const event of response.stream) events.push(event);
     const scenes = events.flatMap((event) => event.type === "scene.add" ? [event.data.scene] : []);
-    expect(scenes.map(({ id }) => id)).toEqual(["body", "close-first"]);
+    expect(scenes.map(({ id }) => id)).toEqual(["supplied-opening", "body", "close-first"]);
     expect(scenes.at(-1)?.variables).toEqual({ cta: "Read now" });
     expect(JSON.stringify(events)).not.toContain("close-second");
   });
@@ -401,16 +406,18 @@ describe("video response core", () => {
       "response.start",
       "scene.add",
       "scene.add",
+      "scene.add",
       "response.warning",
       "response.complete",
     ]);
-    expect(events[3]).toMatchObject({
+    expect(events[4]).toMatchObject({
       type: "response.warning",
       data: { warning: { code: "scene_patch_rejected_readability", sceneId: "first" } },
     });
     expect((await response.result).config?.scenes).toMatchObject([
-      { id: "first", timing: { startTime: 0, endTime: 4 } },
-      { id: "second", timing: { startTime: 4, endTime: 8 } },
+      { id: "supplied-opening", timing: { startTime: 0, endTime: 3 } },
+      { id: "first", timing: { startTime: 3, endTime: 7 } },
+      { id: "second", timing: { startTime: 7, endTime: 11 } },
     ]);
   });
 
@@ -441,14 +448,15 @@ describe("video response core", () => {
     expect(events.map(({ type }) => type)).toEqual([
       "response.start",
       "scene.add",
+      "scene.add",
       "response.warning",
       "response.complete",
     ]);
-    expect(events[2]).toMatchObject({
+    expect(events[3]).toMatchObject({
       type: "response.warning",
       data: { warning: { code: "scene_patch_rejected_readability", sceneId: "body" } },
     });
-    expect((await response.result).config?.scenes[0].variables).toEqual({ message: "Short" });
+    expect((await response.result).config?.scenes[1].variables).toEqual({ message: "Short" });
   });
 
   it("omits timing patches that move a scene away from its sequential start", async () => {
@@ -478,10 +486,11 @@ describe("video response core", () => {
     expect(events.map(({ type }) => type)).toEqual([
       "response.start",
       "scene.add",
+      "scene.add",
       "response.warning",
       "response.complete",
     ]);
-    expect(events[2]).toMatchObject({
+    expect(events[3]).toMatchObject({
       type: "response.warning",
       data: { warning: { code: "scene_patch_rejected_readability", sceneId: "body" } },
     });
@@ -491,7 +500,7 @@ describe("video response core", () => {
     const { createVideo } = await import("../src/internal");
     const response = createVideo({
       input: "Update",
-      maxDurationSec: 5,
+      maxDurationSec: 8,
     }, {
       generate: async function* () {
         yield {
@@ -521,10 +530,11 @@ describe("video response core", () => {
     expect(events.map(({ type }) => type)).toEqual([
       "response.start",
       "scene.add",
+      "scene.add",
       "response.warning",
       "response.complete",
     ]);
-    expect(events[2]).toMatchObject({
+    expect(events[3]).toMatchObject({
       type: "response.warning",
       data: { warning: { code: "scene_omitted_unreadable", sceneId: "too-late" } },
     });
@@ -535,10 +545,12 @@ describe("video response core", () => {
     await expect(response.result).resolves.toMatchObject({ status: "complete", finishReason: "length" });
   });
 
-  it("returns a typed warning and terminal error when no readable scene can fit", async () => {
+  it("keeps the fallback opening in the error snapshot when no generated scene can fit", async () => {
     const { createVideo } = await import("../src/internal");
     const response = createVideo({ input: "Grounded but too long", maxDurationSec: 5 }, {
-      getTemplatePacing: () => ({ minDuration: 6, preferredDuration: 6 }),
+      getTemplatePacing: (id) => id === "body"
+        ? { minDuration: 6, preferredDuration: 6 }
+        : undefined,
       generate: async function* () {
         yield {
           type: "scene.add" as const,
@@ -552,15 +564,16 @@ describe("video response core", () => {
     for await (const event of response.stream) events.push(event);
     expect(events.map(({ type }) => type)).toEqual([
       "response.start",
+      "scene.add",
       "response.warning",
       "response.error",
     ]);
-    expect(events[1]).toMatchObject({
+    expect(events[2]).toMatchObject({
       data: { warning: { code: "scene_omitted_unreadable", sceneId: "impossible" } },
     });
     expect(events.at(-1)).toMatchObject({
       type: "response.error",
-      data: { error: { message: expect.stringContaining("inspect recoverable errors and warnings") } },
+      data: { terminal: true, snapshot: { scenes: [{ id: "supplied-opening" }] } },
     });
     await expect(response.result).resolves.toMatchObject({
       status: "error",
@@ -573,28 +586,28 @@ describe("video response core", () => {
     const cases = [
       {
         id: "headline",
-        maxDurationSec: 8,
+        maxDurationSec: 11,
         variables: { headline: "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen" },
         timing: { contentFields: ["headline"], contentUnit: "words" as const },
         expectedDuration: 5,
       },
       {
         id: "body",
-        maxDurationSec: 8,
+        maxDurationSec: 11,
         variables: { body: "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five twenty-six twenty-seven" },
         timing: { contentFields: ["body"], contentUnit: "words" as const },
         expectedDuration: 7,
       },
       {
         id: "list",
-        maxDurationSec: 7,
+        maxDurationSec: 10,
         variables: { items: ["one", "two", "three", "four", "five", "six"] },
         timing: { contentFields: ["items"], contentUnit: "items" as const },
         expectedDuration: undefined,
       },
       {
         id: "data",
-        maxDurationSec: 8,
+        maxDurationSec: 11,
         variables: { bars: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }] },
         timing: { contentFields: ["bars"], contentUnit: "items" as const },
         expectedDuration: 6,
@@ -606,7 +619,9 @@ describe("video response core", () => {
         const response = createVideo({ input: "Grounded fixture", maxDurationSec: fixture.maxDurationSec }, {
           requestId: `request-${fixture.id}`,
           runId: `run-${fixture.id}`,
-          getTemplatePacing: () => ({ minDuration: 2, preferredDuration: 2, timing: fixture.timing }),
+          getTemplatePacing: (id) => id === fixture.id
+            ? { minDuration: 2, preferredDuration: 2, timing: fixture.timing }
+            : undefined,
           generate: async function* () {
             yield {
               type: "scene.add" as const,
@@ -629,25 +644,23 @@ describe("video response core", () => {
       const second = await run();
       expect(second.events, fixture.id).toEqual(first.events);
       expect(second.state, fixture.id).toEqual(first.state);
-      expect(first.events[1], fixture.id).toMatchObject({
+      expect(first.events.find((event) => event.type === "response.warning" &&
+        event.data.warning.sceneId === fixture.id), fixture.id).toMatchObject({
         type: "response.warning",
         data: { warning: { sceneId: fixture.id, category: "readability" } },
       });
       if (fixture.expectedDuration == null) {
-        expect(first.events.map(({ type }) => type), fixture.id).toEqual([
-          "response.start",
-          "response.warning",
-          "response.error",
-        ]);
         expect(first.state.status, fixture.id).toBe("error");
+        expect(first.state.config?.scenes.map(({ id }) => id), fixture.id)
+          .toEqual(["supplied-opening"]);
       } else {
         expect(first.state.status, fixture.id).toBe("complete");
-        expect(first.state.config?.scenes[0].timing, fixture.id).toMatchObject({
-          startTime: 0,
-          endTime: fixture.expectedDuration,
+        expect(first.state.config?.scenes.find(({ id }) => id === fixture.id)?.timing, fixture.id).toMatchObject({
+          startTime: 3,
+          endTime: fixture.expectedDuration + 3,
           fixedDuration: fixture.expectedDuration,
         });
-        expect(first.state.config?.scenes[0].timing.endTime, fixture.id)
+        expect(first.state.config?.scenes.find(({ id }) => id === fixture.id)?.timing.endTime, fixture.id)
           .toBeLessThanOrEqual(fixture.maxDurationSec);
       }
     }
@@ -766,15 +779,22 @@ describe("video response core", () => {
     });
   });
 
-  it("rejects an opening scene that the client did not negotiate before streaming starts", async () => {
+  it("keeps the runtime-owned opening outside planner template selection", async () => {
     const { createVideo } = await import("../src/internal");
-    expect(() => createVideo({
+    const response = createVideo({
       input: "Activation update",
       opening: "Your video is getting ready.",
     }, {
       capabilities: { templates: ["bigNumber"] },
       generate: async function* () { yield { type: "plan.complete" as const }; },
-    })).toThrow("Scene template media was not negotiated");
+    });
+
+    expect(response.initialConfig.scenes[0]).toMatchObject({
+      id: "supplied-opening",
+      templateId: "media",
+      variables: { texts: "Your video is getting ready.", mediaType: "gradient" },
+    });
+    expect(response.request.capabilities).toEqual({ templates: ["bigNumber"] });
   });
 
   it("validates the deterministic opening before streaming starts", async () => {
@@ -802,7 +822,9 @@ describe("video response core", () => {
   it("validates a generated scene before emitting it", async () => {
     const { createVideo } = await import("../src/internal");
     const response = createVideo({ input: "Grounded facts" }, {
-      validateScene: () => { throw new Error("scene rejected"); },
+      validateScene: (scene) => {
+        if (scene.id === "invalid") throw new Error("scene rejected");
+      },
       generate: async function* () {
         yield {
           type: "scene.add" as const,
@@ -819,7 +841,7 @@ describe("video response core", () => {
 
     const events = [];
     for await (const event of response.stream) events.push(event);
-    expect(events.map(({ type }) => type)).toEqual(["response.start", "response.error"]);
+    expect(events.map(({ type }) => type)).toEqual(["response.start", "scene.add", "response.error"]);
     expect(events.at(-1)).toMatchObject({
       type: "response.error",
       data: { error: { code: "generation_failed", message: "Video response generation failed" } },
@@ -854,7 +876,12 @@ describe("video response core", () => {
 
     const events = [];
     for await (const event of response.stream) events.push(event);
-    expect(events.map(({ type }) => type)).toEqual(["response.start", "scene.add", "response.error"]);
+    expect(events.map(({ type }) => type)).toEqual([
+      "response.start",
+      "scene.add",
+      "scene.add",
+      "response.error",
+    ]);
     expect(events.at(-1)).toMatchObject({
       type: "response.error",
       data: { error: { code: "generation_failed", message: "Video response generation failed" } },
@@ -894,7 +921,12 @@ describe("video response core", () => {
 
     const events = [];
     for await (const event of response.stream) events.push(event);
-    expect(events.map(({ type }) => type)).toEqual(["response.start", "scene.add", "response.error"]);
+    expect(events.map(({ type }) => type)).toEqual([
+      "response.start",
+      "scene.add",
+      "scene.add",
+      "response.error",
+    ]);
     expect(events.at(-1)).toMatchObject({
       type: "response.error",
       data: { error: { code: "generation_failed", message: "Video response generation failed" } },
@@ -978,7 +1010,7 @@ describe("video response core", () => {
 
     const events = [];
     for await (const event of response.stream) events.push(event);
-    expect(events.map(({ type }) => type)).toEqual(["response.start", "response.error"]);
+    expect(events.map(({ type }) => type)).toEqual(["response.start", "scene.add", "response.error"]);
     expect(events.at(-1)).toMatchObject({
       type: "response.error",
       data: { error: { code: "generation_failed", message: "Video response generation failed" } },

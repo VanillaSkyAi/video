@@ -28,12 +28,13 @@ Bound request bytes and reject secret-shaped fields on the server. Do not pass p
 
 ## Opening
 
-When supplied, `opening` becomes a deterministic `media` scene emitted before
-provider work. It contains only the supplied sentence and explicitly uses the
-brand gradient without stock media. The SDK requests a three-second opening,
-then applies its normal readability and overall-duration budget. It owns the
-scene ID, template, variables, and timing so callers only provide the copy. It
-should:
+`opening` becomes a deterministic `media` scene emitted before provider work.
+When callers omit it, the SDK uses `Creating your video...`; a supplied value
+replaces that fallback. The scene contains only that sentence and explicitly
+uses the brand gradient without stock media. The SDK requests a three-second
+opening, then applies its normal readability and overall-duration budget. It
+owns the scene ID, template, variables, and timing so callers only provide
+optional custom copy. That copy should:
 
 - be personal or situational enough to feel intentional;
 - require no network media lookup;
@@ -41,4 +42,5 @@ should:
 - be one concise sentence that fits comfortably in both supported orientations;
 - be part of the final story, not a spinner disguised as a scene.
 
-Omit `opening` when the generated story should begin with its first planned scene.
+The opening is runtime-owned, so it remains available even when `templateIds`
+does not let the planner select `media` for generated body scenes.

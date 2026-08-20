@@ -177,7 +177,8 @@ describe("createVideoHandler", () => {
     for await (const event of decodeVideoSse(response.body!)) events.push(event);
 
     expect(events.filter(({ type }) => type === "scene.add")).toMatchObject([
-      { data: { scene: { id: "body-1", timing: { startTime: 0, endTime: 26.5, fixedDuration: 26.5 } } } },
+      { data: { scene: { id: "supplied-opening", timing: { startTime: 0, endTime: 3, fixedDuration: 3 } } } },
+      { data: { scene: { id: "body-1", timing: { startTime: 3, endTime: 26.5, fixedDuration: 23.5 } } } },
       { data: { scene: { id: "close-1", timing: { startTime: 26.5, endTime: 30, fixedDuration: 3.5 } } } },
     ]);
     expect(events.filter(({ type }) => type === "response.warning")).toMatchObject([
@@ -216,12 +217,13 @@ describe("createVideoHandler", () => {
 
     expect(events.map(({ type }) => type)).toEqual([
       "response.start",
+      "scene.add",
       "response.warning",
       "scene.add",
       "scene.add",
       "response.complete",
     ]);
-    expect(events[1]).toMatchObject({
+    expect(events[2]).toMatchObject({
       type: "response.warning",
       data: {
         warning: {
@@ -233,7 +235,8 @@ describe("createVideoHandler", () => {
       },
     });
     expect(events.filter(({ type }) => type === "scene.add")).toMatchObject([
-      { data: { scene: { id: "body-1", timing: { startTime: 0, endTime: 26, fixedDuration: 26 } } } },
+      { data: { scene: { id: "supplied-opening", timing: { startTime: 0, endTime: 3, fixedDuration: 3 } } } },
+      { data: { scene: { id: "body-1", timing: { startTime: 3, endTime: 26, fixedDuration: 23 } } } },
       { data: { scene: { id: "close-1", timing: { startTime: 26, endTime: 30, fixedDuration: 4 } } } },
     ]);
     expect(systemPrompt).toContain('"variables":{"message":"string!"}');
@@ -305,7 +308,7 @@ describe("createVideoHandler", () => {
 
     expect(events.filter(({ type }) => type === "scene.add").map((event) =>
       event.type === "scene.add" ? event.data.scene.id : ""
-    )).toEqual(["body-1", "close-1"]);
+    )).toEqual(["supplied-opening", "body-1", "close-1"]);
     expect(events.filter(({ type }) => type === "response.warning")).toMatchObject([
       { data: { warning: { code: "scene_duration_adjusted", sceneId: "body-1" } } },
       { data: { warning: { code: "scene_omitted_for_closer", sceneId: "body-2" } } },
@@ -313,7 +316,10 @@ describe("createVideoHandler", () => {
     ]);
     expect(events.at(-1)).toMatchObject({
       type: "response.complete",
-      data: { finishReason: "length", snapshot: { scenes: [{ id: "body-1" }, { id: "close-1" }] } },
+      data: {
+        finishReason: "length",
+        snapshot: { scenes: [{ id: "supplied-opening" }, { id: "body-1" }, { id: "close-1" }] },
+      },
     });
   });
 
@@ -344,14 +350,18 @@ describe("createVideoHandler", () => {
 
     expect(events.filter(({ type }) => type === "scene.add").map((event) =>
       event.type === "scene.add" ? event.data.scene.id : ""
-    )).toEqual(["body-1", "payoff-1"]);
+    )).toEqual(["supplied-opening", "body-1", "payoff-1"]);
     expect(events).toContainEqual(expect.objectContaining({
       type: "response.warning",
-      data: { warning: expect.objectContaining({ code: "scene_omitted_for_closer", sceneId: "body-2" }) },
+      data: { warning: expect.objectContaining({ code: "scene_omitted_unreadable", sceneId: "body-2" }) },
     }));
     expect(events.at(-1)).toMatchObject({
       type: "response.complete",
-      data: { snapshot: { scenes: [{ id: "body-1" }, { id: "payoff-1", templateId: "payoff" }] } },
+      data: {
+        snapshot: {
+          scenes: [{ id: "supplied-opening" }, { id: "body-1" }, { id: "payoff-1", templateId: "payoff" }],
+        },
+      },
     });
     expect(events.at(-1)?.data).not.toHaveProperty("placement");
   });
@@ -383,12 +393,19 @@ describe("createVideoHandler", () => {
 
     expect(events.filter(({ type }) => type === "scene.add").map((event) =>
       event.type === "scene.add" ? event.data.scene.id : ""
-    )).toEqual(["body-1", "body-2", "payoff-1"]);
+    )).toEqual(["supplied-opening", "body-1", "body-2", "payoff-1"]);
     expect(events.at(-1)).toMatchObject({
       type: "response.error",
       data: {
         terminal: true,
-        snapshot: { scenes: [{ id: "body-1" }, { id: "body-2" }, { id: "payoff-1", templateId: "payoff" }] },
+        snapshot: {
+          scenes: [
+            { id: "supplied-opening" },
+            { id: "body-1" },
+            { id: "body-2" },
+            { id: "payoff-1", templateId: "payoff" },
+          ],
+        },
       },
     });
   });
@@ -452,7 +469,7 @@ describe("createVideoHandler", () => {
 
     expect(events.filter(({ type }) => type === "scene.add").map((event) =>
       event.type === "scene.add" ? event.data.scene.id : ""
-    )).toEqual(["body-1"]);
+    )).toEqual(["supplied-opening", "body-1"]);
     expect(events).toContainEqual(expect.objectContaining({
       type: "response.error",
       data: expect.objectContaining({
@@ -553,7 +570,7 @@ describe("createVideoHandler", () => {
     expect(providerContext?.systemPrompt).toContain("TRUSTED TEMPLATE CATALOG");
     expect(providerContext?.systemPrompt).toContain('"id":"metric"');
     expect(providerContext?.userPrompt).toContain("Revenue reached 42.");
-    expect(body).toContain('"templates":["metric"]');
+    expect(body).toContain('"templates":["media","metric"]');
     expect(body).toContain('"templateId":"metric"');
   });
 
@@ -698,8 +715,13 @@ describe("createVideoHandler", () => {
     for await (const event of decodeVideoSse(response.body!)) events.push(event);
     const scenes = events.flatMap((event) => event.type === "scene.add" ? [event.data.scene] : []);
 
-    expect(resolveMedia).toHaveBeenCalledTimes(1);
-    expect(resolveMedia).toHaveBeenCalledWith("product team celebrating", expect.objectContaining({
+    expect(resolveMedia).toHaveBeenCalledTimes(2);
+    expect(resolveMedia).toHaveBeenNthCalledWith(1, "product team", expect.objectContaining({
+      templateId: "bigNumber",
+      preferredType: "any",
+      signal: expect.any(AbortSignal),
+    }));
+    expect(resolveMedia).toHaveBeenNthCalledWith(2, "product team celebrating", expect.objectContaining({
       templateId: "media",
       preferredType: "video",
       signal: expect.any(AbortSignal),
@@ -709,6 +731,11 @@ describe("createVideoHandler", () => {
     expect(scenes[0].variables).not.toHaveProperty("mediaKeyword");
     expect(scenes[0].variables).not.toHaveProperty("mediaUrl");
     expect(scenes[1].variables).toMatchObject({
+      mediaUrl: "https://media.example.test/team.mp4",
+      mediaType: "video",
+      mediaPoster: "https://media.example.test/team.jpg",
+    });
+    expect(scenes[2].variables).toMatchObject({
       mediaUrl: "https://media.example.test/team.mp4",
       mediaType: "video",
       mediaPoster: "https://media.example.test/team.jpg",
@@ -740,7 +767,8 @@ describe("createVideoHandler", () => {
     }));
     const events = [];
     for await (const event of decodeVideoSse(response.body!)) events.push(event);
-    const second = events.flatMap((event) => event.type === "scene.add" ? [event.data.scene] : [])[1];
+    const second = events.flatMap((event) => event.type === "scene.add" ? [event.data.scene] : [])
+      .find(({ id }) => id === "second")!;
 
     expect(second.variables).toMatchObject({ mediaType: "gradient" });
     expect(second.variables).not.toHaveProperty("mediaKeyword");
@@ -748,7 +776,7 @@ describe("createVideoHandler", () => {
     expect(events.at(-1)).toMatchObject({ type: "response.complete" });
   });
 
-  it("keeps the first accepted generated scene asset-free after an earlier candidate is rejected", async () => {
+  it("uses the asset-free runtime opening before resolving a generated media scene", async () => {
     const { createVideoHandler } = await import("../src/server");
     const handler = createVideoHandler({
       authorize: "none",
@@ -777,11 +805,19 @@ describe("createVideoHandler", () => {
     for await (const event of decodeVideoSse(response.body!)) events.push(event);
     const scenes = events.flatMap((event) => event.type === "scene.add" ? [event.data.scene] : []);
 
-    expect(scenes.map(({ id }) => id)).toEqual(["premature-media", "first-accepted"]);
+    expect(scenes.map(({ id }) => id)).toEqual([
+      "supplied-opening",
+      "premature-media",
+      "first-accepted",
+    ]);
     expect(scenes[0].variables).toMatchObject({ mediaType: "gradient" });
     expect(scenes[0].variables).not.toHaveProperty("mediaUrl");
     expect(scenes[0].variables).not.toHaveProperty("mediaKeyword");
-    expect(JSON.stringify(events)).not.toContain("premature.mp4");
+    expect(scenes[1].variables).toMatchObject({
+      mediaType: "video",
+      mediaUrl: "https://media.example.test/premature.mp4",
+    });
+    expect(scenes[1].variables).not.toHaveProperty("mediaKeyword");
     expect(events.at(-1)).toMatchObject({ type: "response.complete" });
   });
 
@@ -900,8 +936,9 @@ describe("createVideoHandler", () => {
     for await (const event of decodeVideoSse(response.body!)) events.push(event);
     const scenes = events.flatMap((event) => event.type === "scene.add" ? [event.data.scene] : []);
 
-    expect(scenes[1].variables).toMatchObject({ mediaType: "gradient" });
-    expect(scenes[1].variables).not.toHaveProperty("mediaKeyword");
+    const later = scenes.find(({ id }) => id === "later")!;
+    expect(later.variables).toMatchObject({ mediaType: "gradient" });
+    expect(later.variables).not.toHaveProperty("mediaKeyword");
     expect(events.at(-1)).toMatchObject({ type: "response.complete" });
     expect(JSON.stringify(events)).not.toContain("private provider failure");
   });
@@ -966,7 +1003,8 @@ describe("createVideoHandler", () => {
     }));
     const events = [];
     for await (const event of decodeVideoSse(response.body!)) events.push(event);
-    const scene = events.find(({ type }) => type === "scene.add");
+    const scene = events.find((event) => event.type === "scene.add" &&
+      event.data.scene.id === "custom");
 
     expect(systemPrompt).not.toContain('"mediaKeyword"');
     expect(resolveMedia).not.toHaveBeenCalled();

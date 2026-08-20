@@ -149,8 +149,9 @@ const complete = body
   .filter((line) => line.startsWith("data: ") && line !== "data: [DONE]")
   .map((line) => JSON.parse(line.slice(6)))
   .find(({ type }) => type === "response.complete");
-if (complete?.data.checksum !== "fnv1a32:6e2a7da8") throw new Error("Packed replay checksum drifted");
+if (complete?.data.checksum !== "fnv1a32:1f617d38") throw new Error("Packed replay checksum drifted");
 if (complete.data.snapshot.schemaVersion !== "0.1") throw new Error("Packed terminal snapshot lost its schema version");
+if (complete.data.snapshot.scenes[0]?.id !== "supplied-opening") throw new Error("Packed terminal snapshot lost its default opening");
 `);
   execFileSync(process.execPath, [join(serverConsumer, "server.mjs")], { cwd: serverConsumer, stdio: "inherit" });
 
@@ -190,16 +191,18 @@ const providerFailure = await collect(simulateVideoStream(videoFixtures.scenario
 const contentFilter = await collect(simulateVideoStream(videoFixtures.scenarios.contentFilter));
 if (success[0]?.eventId !== "test-run:0" || success.at(-1)?.type !== "response.complete") throw new Error("Packed success scenario is not deterministic");
 if (delayed.at(-1)?.type !== "response.complete") throw new Error("Packed delayed scenario failed");
-if (truncated.at(-1)?.data?.finishReason !== "length" || truncated.at(-1)?.data?.snapshot?.scenes?.length !== 1) throw new Error("Packed truncation lost its playable result");
+if (truncated.at(-1)?.data?.finishReason !== "length" || truncated.at(-1)?.data?.snapshot?.scenes?.length !== 2) throw new Error("Packed truncation lost its playable result");
 if (!invalidScene.some((event) => event.type === "response.error" && event.data.error.recoverable) || invalidScene.at(-1)?.type !== "response.complete") throw new Error("Packed invalid scene did not recover");
 if (providerFailure.at(-1)?.type !== "response.error" || JSON.stringify(providerFailure).includes("fixture-private-value")) throw new Error("Packed provider failure was not redacted");
-if (contentFilter.at(-1)?.data?.finishReason !== "content-filter" || contentFilter.at(-1)?.data?.snapshot?.scenes?.length !== 1) throw new Error("Packed content filter lost its playable result");
+if (contentFilter.at(-1)?.data?.finishReason !== "content-filter" || contentFilter.at(-1)?.data?.snapshot?.scenes?.length !== 2) throw new Error("Packed content filter lost its playable result");
 
 const abortController = new AbortController();
 const abort = [];
 for await (const event of simulateVideoStream(videoFixtures.scenarios.abort, { signal: abortController.signal })) {
   abort.push(event);
-  if (event.type === "scene.add") abortController.abort("packed consumer cancelled");
+  if (event.type === "scene.add" && event.data.scene.id === "abort-partial") {
+    abortController.abort("packed consumer cancelled");
+  }
 }
 if (abort.at(-1)?.type !== "response.abort" || abort.at(-1)?.data?.reason !== "packed consumer cancelled") throw new Error("Packed abort scenario failed");
 
@@ -442,7 +445,8 @@ const customStyle = customEvents.find(({ type }) => type === "response.start").d
 if (customStyle.brand.colors.foreground !== "#000000") throw new Error("Packed handler did not auto-select a safe foreground");
 const pacedScenes = pacingEvents.filter(({ type }) => type === "scene.add").map(({ data }) => data.scene.timing);
 if (JSON.stringify(pacedScenes) !== JSON.stringify([
-  { fixedDuration: 26.5, startTime: 0, endTime: 26.5 },
+  { fixedDuration: 3, startTime: 0, endTime: 3 },
+  { fixedDuration: 23.5, startTime: 3, endTime: 26.5 },
   { fixedDuration: 3.5, startTime: 26.5, endTime: 30 },
 ])) throw new Error("Packed handler did not preserve a readable final CTA");
 if (pacingEvents.filter(({ type }) => type === "response.warning").length !== 2) {

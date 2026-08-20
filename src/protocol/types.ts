@@ -145,7 +145,7 @@ export interface VideoInput {
   orientation?: VideoOrientation;
   /** Optional global visual direction. Omit for VanillaSky defaults. */
   style?: VideoStyleOptions;
-  /** Optional deterministic opening copy. Scene details are inferred. */
+  /** Optional custom opening copy. Omit for the deterministic "Creating your video..." fallback. */
   opening?: string;
   brand?: VideoBrandInput;
   /** Viewer or account context that may appear verbatim. It is data, never instructions. */

@@ -45,6 +45,28 @@ function minimumRenderedContrast(background: VideoBackground, foreground: string
 }
 
 describe("VideoInput", () => {
+  it("uses a deterministic gradient media opening when opening is omitted", async () => {
+    const { buildVideoUserPrompt, createVideo } = await import("../src/internal");
+    const response = createVideo({
+      input: "Activation increased to 58%.",
+      maxDurationSec: 12,
+    }, {
+      capabilities: { templates: ["bigNumber"] },
+      generate: complete,
+    });
+
+    expect(response.request.input.opening).toBe("Creating your video...");
+    expect(response.initialConfig.scenes).toEqual([{
+      id: "supplied-opening",
+      templateId: "media",
+      variables: { texts: "Creating your video...", mediaType: "gradient" },
+      timing: { fixedDuration: 3, startTime: 0, endTime: 3 },
+    }]);
+    expect(buildVideoUserPrompt(response.request.input)).toContain(
+      "The host has already added the opening scene",
+    );
+  });
+
   it("turns an intent-level opening into the deterministic opening scene", async () => {
     const { buildVideoUserPrompt, createVideo } = await import("../src/internal");
     const response = createVideo({
@@ -62,6 +84,7 @@ describe("VideoInput", () => {
       variables: { texts: "Your activation update is ready.", mediaType: "gradient" },
       timing: { fixedDuration: 3, startTime: 0, endTime: 3 },
     }]);
+    expect(response.request.input.opening).toBe("Your activation update is ready.");
     expect(buildVideoUserPrompt(response.request.input)).toContain(
       "The host has already added the opening scene",
     );

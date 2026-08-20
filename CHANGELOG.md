@@ -11,6 +11,10 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
   reason by default add that time directly to the first generated scene, so
   hosts that want a video to start quickly should disable extended reasoning
   and tune effort against `timeToFirstSceneMs` and `rejectedSceneCount`.
+- Uses a three-second, gradient-backed `media` opening with
+  `Creating your video...` whenever `VideoInput.opening` is omitted, while
+  preserving supplied opening copy and keeping body-template selection
+  independent from the runtime-owned opening.
 
 ## 0.2.0
 

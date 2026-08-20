@@ -69,7 +69,7 @@ describe("typed generation lifecycle", () => {
       finishReason: "stop",
       acceptedSceneCount: 1,
       rejectedSceneCount: 0,
-      videoDurationSec: 4,
+      videoDurationSec: 7,
       requestedModelId: "gpt-requested",
       resolvedModelId: "gpt-resolved",
       usage: {

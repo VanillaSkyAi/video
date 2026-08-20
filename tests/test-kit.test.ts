@@ -110,11 +110,12 @@ describe("public deterministic test kit", () => {
     }));
 
     expect(first).toEqual(second);
-    expect(first.map(({ sequence }) => sequence)).toEqual([0, 1, 2]);
+    expect(first.map(({ sequence }) => sequence)).toEqual([0, 1, 2, 3]);
     expect(first.map(({ eventId }) => eventId)).toEqual([
       "test-run:0",
       "test-run:1",
       "test-run:2",
+      "test-run:3",
     ]);
     expect(first[0]).toMatchObject({
       type: "response.start",
@@ -137,6 +138,9 @@ describe("public deterministic test kit", () => {
     try {
       const iterator = simulateVideoStream(videoFixtures.scenarios.delayed)[Symbol.asyncIterator]();
       await expect(iterator.next()).resolves.toMatchObject({ value: { type: "response.start" } });
+      await expect(iterator.next()).resolves.toMatchObject({
+        value: { type: "scene.add", data: { scene: { id: "supplied-opening" } } },
+      });
       const pending = iterator.next();
       let settled = false;
       void pending.then(() => { settled = true; });
@@ -159,7 +163,7 @@ describe("public deterministic test kit", () => {
       type: "response.complete",
       data: {
         finishReason: "length",
-        snapshot: { scenes: [{ id: "truncated-partial" }] },
+        snapshot: { scenes: [{ id: "supplied-opening" }, { id: "truncated-partial" }] },
       },
     });
   });
@@ -180,7 +184,9 @@ describe("public deterministic test kit", () => {
     }));
     expect(events.at(-1)).toMatchObject({
       type: "response.complete",
-      data: { snapshot: { scenes: [{ id: "valid-after-invalid" }] } },
+      data: {
+        snapshot: { scenes: [{ id: "supplied-opening" }, { id: "valid-after-invalid" }] },
+      },
     });
   });
 
@@ -219,7 +225,7 @@ describe("public deterministic test kit", () => {
       type: "response.complete",
       data: {
         finishReason: "content-filter",
-        snapshot: { scenes: [{ id: "content-filter-partial" }] },
+        snapshot: { scenes: [{ id: "supplied-opening" }, { id: "content-filter-partial" }] },
       },
     });
   });
@@ -231,14 +237,16 @@ describe("public deterministic test kit", () => {
       signal: controller.signal,
     })) {
       events.push(event);
-      if (event.type === "scene.add") controller.abort("consumer cancelled");
+      if (event.type === "scene.add" && event.data.scene.id === "abort-partial") {
+        controller.abort("consumer cancelled");
+      }
     }
 
     expect(events.at(-1)).toMatchObject({
       type: "response.abort",
       data: {
         reason: "consumer cancelled",
-        snapshot: { scenes: [{ id: "abort-partial" }] },
+        snapshot: { scenes: [{ id: "supplied-opening" }, { id: "abort-partial" }] },
       },
     });
   });
@@ -256,7 +264,7 @@ describe("public deterministic test kit", () => {
         type: "response.abort",
         data: {
           reason: "Request timed out",
-          snapshot: { scenes: [{ id: "timeout-partial" }] },
+          snapshot: { scenes: [{ id: "supplied-opening" }, { id: "timeout-partial" }] },
         },
       });
       expect(JSON.stringify(events)).not.toContain("50");
@@ -279,6 +287,7 @@ describe("public deterministic test kit", () => {
     expect(response.headers.get("content-type")).toBe("text/event-stream; charset=utf-8");
     expect(events.map(({ type }) => type)).toEqual([
       "response.start",
+      "scene.add",
       "scene.add",
       "response.complete",
     ]);

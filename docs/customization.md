@@ -76,7 +76,8 @@ appear in the story.
 first validated scene arrives. The cover is player state, not video content: it
 is never written to the event log, replay, or export.
 
-An optional opening is deterministic and should not wait for an LLM or remote media:
+The opening is deterministic and should not wait for an LLM or remote media.
+Omit it to use `Creating your video...`, or supply one concise custom sentence:
 
 ```ts
 opening: "Joris, your Q2 recap is ready."
