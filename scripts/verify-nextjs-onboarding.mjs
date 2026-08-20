@@ -11,6 +11,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -129,6 +130,26 @@ const providerExpectations = {
 
 function hashFile(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+async function allocateLocalPort() {
+  const server = createServer();
+  server.unref();
+  return new Promise((resolvePort, reject) => {
+    server.once("error", reject);
+    server.listen({ host: "127.0.0.1", port: 0, exclusive: true }, () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close();
+        reject(new Error("Could not allocate a local verification port"));
+        return;
+      }
+      server.close((error) => {
+        if (error) reject(error);
+        else resolvePort(address.port);
+      });
+    });
+  });
 }
 
 function childEnvironment(extra = {}) {
@@ -451,6 +472,15 @@ async function waitForOutput(output, pattern) {
   throw new Error(`Server output did not match ${pattern}:\n${output.value}`);
 }
 
+async function assertSavedDuration(page, expected, provider) {
+  const duration = page.getByTestId("saved-duration");
+  await duration.waitFor();
+  const actual = (await duration.innerText()).trim();
+  if (actual !== expected) {
+    throw new Error(`${provider} saved duration was ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`);
+  }
+}
+
 function jsonEvents(output, event) {
   const events = [];
   for (const line of output.value.split("\n")) {
@@ -582,7 +612,7 @@ function assertLockedPackage(lock, packageName, version, integrity, provider) {
   }
 }
 
-async function verifyProvider({ provider, tarball, packed, browser, index }) {
+async function verifyProvider({ provider, tarball, packed, browser }) {
   const expectation = providerExpectations[provider];
   const setupStarted = performance.now();
   const app = join(workspace, `nextjs-${provider}`);
@@ -624,7 +654,7 @@ async function verifyProvider({ provider, tarball, packed, browser, index }) {
   const buildTimeMs = Math.round(performance.now() - buildStarted);
   verifyBrowserBoundary(app, provider);
 
-  const productionPort = 4310 + index * 2;
+  const productionPort = await allocateLocalPort();
   const production = await start(
     app,
     ["run", "start", "--", "-H", "127.0.0.1", "-p", String(productionPort)],
@@ -639,14 +669,16 @@ async function verifyProvider({ provider, tarball, packed, browser, index }) {
       body: JSON.stringify({}),
     });
     if (response.status !== 401) {
-      throw new Error(`${provider} production auth returned ${response.status}, expected 401`);
+      const diagnostic = await response.json().catch(() => undefined);
+      const code = typeof diagnostic?.error?.code === "string" ? ` (${diagnostic.error.code})` : "";
+      throw new Error(`${provider} production auth returned ${response.status}${code}, expected 401`);
     }
   } finally {
     await stopProcessTree(production.server);
   }
 
   const firstVideoStarted = performance.now();
-  const developmentPort = productionPort + 1;
+  const developmentPort = await allocateLocalPort();
   const development = await start(
     app,
     ["run", "dev", "--", "--hostname", "127.0.0.1", "--port", String(developmentPort)],
@@ -680,9 +712,12 @@ async function verifyProvider({ provider, tarball, packed, browser, index }) {
     await page.locator('[data-template-id="activationLift"]').first().waitFor({ timeout: 10_000 });
     await page.getByText("provider/provider_warning:").waitFor({ timeout: 10_000 });
     await page.getByRole("region", { name: "Saved replay" }).waitFor({ timeout: 10_000 });
-    await page.getByTestId("saved-duration").filter({ hasText: "6 seconds" }).waitFor();
+    await assertSavedDuration(page, "8 seconds", provider);
     const savedBeforeReload = await page.evaluate(() => globalThis.localStorage.getItem("vanillasky-quickstart-video"));
-    if (!savedBeforeReload || JSON.parse(savedBeforeReload).scenes?.[0]?.templateId !== "activationLift") {
+    const savedVideo = savedBeforeReload ? JSON.parse(savedBeforeReload) : undefined;
+    if (savedVideo?.scenes?.[0]?.id !== "supplied-opening"
+      || savedVideo.scenes[0].templateId !== "media"
+      || savedVideo.scenes[1]?.templateId !== "activationLift") {
       throw new Error(`${provider} did not persist the completed project-owned video`);
     }
     await waitForResponseBodies(responseBodies, 1);
@@ -713,7 +748,7 @@ async function verifyProvider({ provider, tarball, packed, browser, index }) {
     const postsBeforeReload = generationPostCount;
     await page.reload();
     await page.getByRole("region", { name: "Saved replay" }).waitFor({ timeout: 10_000 });
-    await page.getByTestId("saved-duration").filter({ hasText: "6 seconds" }).waitFor();
+    await assertSavedDuration(page, "8 seconds", provider);
     const savedAfterReload = await page.evaluate(() => globalThis.localStorage.getItem("vanillasky-quickstart-video"));
     if (savedAfterReload !== savedBeforeReload) throw new Error(`${provider} reload changed the saved video`);
     if (generationPostCount !== postsBeforeReload) {
@@ -782,7 +817,7 @@ async function verifyProvider({ provider, tarball, packed, browser, index }) {
   return publicEvidence;
 }
 
-async function verifyCompatibilityProvider({ expectation, tarball, packed, browser, index }) {
+async function verifyCompatibilityProvider({ expectation, tarball, packed, browser }) {
   const { provider } = expectation;
   if (expectation.fixtureOnly !== true) {
     throw new Error(`${provider} compatibility must remain fixture-only`);
@@ -836,7 +871,7 @@ async function verifyCompatibilityProvider({ expectation, tarball, packed, brows
   const buildTimeMs = Math.round(performance.now() - buildStarted);
   verifyCompatibilityBrowserBoundary(app, expectation);
 
-  const productionPort = 4350 + index * 2;
+  const productionPort = await allocateLocalPort();
   const production = await start(
     app,
     ["run", "start", "--", "-H", "127.0.0.1", "-p", String(productionPort)],
@@ -861,7 +896,7 @@ async function verifyCompatibilityProvider({ expectation, tarball, packed, brows
   }
 
   const firstVideoStarted = performance.now();
-  const developmentPort = productionPort + 1;
+  const developmentPort = await allocateLocalPort();
   const development = await start(
     app,
     ["run", "dev", "--", "--hostname", "127.0.0.1", "--port", String(developmentPort)],
@@ -894,7 +929,7 @@ async function verifyCompatibilityProvider({ expectation, tarball, packed, brows
     await page.getByTestId("status").filter({ hasText: "complete" }).waitFor({ timeout: 15_000 });
     await page.locator('[data-template-id="activationLift"]').first().waitFor({ timeout: 10_000 });
     await page.getByRole("region", { name: "Saved replay" }).waitFor({ timeout: 10_000 });
-    await page.getByTestId("saved-duration").filter({ hasText: "6 seconds" }).waitFor();
+    await assertSavedDuration(page, "8 seconds", provider);
     await waitForResponseBodies(responseBodies, 1);
 
     const complete = await waitForJsonEvent(development.output, "video.complete");
@@ -933,7 +968,10 @@ async function verifyCompatibilityProvider({ expectation, tarball, packed, brows
     }
 
     const savedBeforeReload = await page.evaluate(() => globalThis.localStorage.getItem("vanillasky-quickstart-video"));
-    if (!savedBeforeReload || JSON.parse(savedBeforeReload).scenes?.[0]?.templateId !== "activationLift") {
+    const savedVideo = savedBeforeReload ? JSON.parse(savedBeforeReload) : undefined;
+    if (savedVideo?.scenes?.[0]?.id !== "supplied-opening"
+      || savedVideo.scenes[0].templateId !== "media"
+      || savedVideo.scenes[1]?.templateId !== "activationLift") {
       throw new Error(`${provider} did not persist the completed project-owned video`);
     }
     const firstDom = await page.locator("body").innerText();
@@ -947,7 +985,7 @@ async function verifyCompatibilityProvider({ expectation, tarball, packed, brows
     const fetchesBeforeReload = jsonEvents(development.output, "video.compatibility.fetch").length;
     await page.reload();
     await page.getByRole("region", { name: "Saved replay" }).waitFor({ timeout: 10_000 });
-    await page.getByTestId("saved-duration").filter({ hasText: "6 seconds" }).waitFor();
+    await assertSavedDuration(page, "8 seconds", provider);
     await page.waitForTimeout(250);
     const savedAfterReload = await page.evaluate(() => globalThis.localStorage.getItem("vanillasky-quickstart-video"));
     if (savedAfterReload !== savedBeforeReload) throw new Error(`${provider} reload changed the saved video`);
@@ -1049,11 +1087,11 @@ try {
   console.log(JSON.stringify(publicEvidence));
 
   browser = await chromium.launch();
-  for (const [index, provider] of providers.entries()) {
-    retainedProviderEvidence.push(await verifyProvider({ provider, tarball, packed, browser, index }));
+  for (const provider of providers) {
+    retainedProviderEvidence.push(await verifyProvider({ provider, tarball, packed, browser }));
   }
-  for (const [index, expectation] of compatibilityProviders.entries()) {
-    retainedProviderEvidence.push(await verifyCompatibilityProvider({ expectation, tarball, packed, browser, index }));
+  for (const expectation of compatibilityProviders) {
+    retainedProviderEvidence.push(await verifyCompatibilityProvider({ expectation, tarball, packed, browser }));
   }
   const providerEvidencePath = process.env.VANILLASKY_PROVIDER_EVIDENCE_PATH;
   if (providerEvidencePath) {

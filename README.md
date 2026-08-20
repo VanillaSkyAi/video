@@ -50,7 +50,7 @@ const model = openai(process.env.OPENAI_MODEL ?? "gpt-4.1");
 const handle = createVideoHandler({
   // Local development only. Replace with your session check before deploying.
   authorize: (request) => {
-    if (process.env.NODE_ENV !== "development") return false;
+    if (process.env.VANILLASKY_LOCAL_DEMO !== "1") return false;
     const hostname = new URL(request.url).hostname;
     return hostname === "localhost" || hostname === "127.0.0.1";
   },
@@ -66,7 +66,8 @@ export const POST = handle;
 export const OPTIONS = handle;
 ```
 
-The local authorization denies every production request. Replace it before
+The packaged development command supplies the local marker only to `next dev`,
+so production builds and `next start` deny every request. Replace it before
 deploying. The model can come from OpenAI, Anthropic, an AI SDK registry or
 gateway, or any compatible streaming adapter.
 

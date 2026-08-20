@@ -29,7 +29,7 @@ const model = openai(process.env.OPENAI_MODEL ?? "gpt-4.1");
 const handle = createVideoHandler({
   // Local development only. Replace with your session check before deploying.
   authorize: (request) => {
-    if (process.env.NODE_ENV !== "development") return false;
+    if (process.env.VANILLASKY_LOCAL_DEMO !== "1") return false;
     const hostname = new URL(request.url).hostname;
     return hostname === "localhost" || hostname === "127.0.0.1";
   },
@@ -45,9 +45,10 @@ export const POST = handle;
 export const OPTIONS = handle;
 ```
 
-The local bypass is intentionally fail-closed: it accepts only localhost while
-Next.js is in development and denies every production request. Replace it with
-your real session validation before deploying. For literal files and commands,
+The local bypass is intentionally fail-closed: the packaged development command
+sets its marker only for `next dev`, and it accepts only localhost. Every
+production request is denied. Replace it with your real session validation
+before deploying. For literal files and commands,
 use the tested
 [`examples/nextjs-quickstart` directory](https://github.com/VanillaSkyAi/video/tree/v0.2.0/examples/nextjs-quickstart).
 

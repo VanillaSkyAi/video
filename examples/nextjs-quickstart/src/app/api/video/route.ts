@@ -6,7 +6,7 @@ const model = openai(process.env.OPENAI_MODEL ?? "gpt-4.1");
 
 const handle = createVideoHandler({
   authorize: (request) => {
-    if (process.env.NODE_ENV !== "development") return false;
+    if (process.env.VANILLASKY_LOCAL_DEMO !== "1") return false;
     const hostname = new URL(request.url).hostname;
     return hostname === "localhost" || hostname === "127.0.0.1";
   },

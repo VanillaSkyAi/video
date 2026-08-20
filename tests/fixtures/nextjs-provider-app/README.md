@@ -32,9 +32,10 @@ ANTHROPIC_API_KEY=your-key
 The route and React component do not change. Both adapters use the Vercel AI
 SDK, and the provider selector is imported only by server code.
 
-The route deliberately authorizes only `localhost` and `127.0.0.1` while
-`NODE_ENV=development`. This makes local development explicit without turning
-the sample into an unauthenticated production endpoint. Replace `authorize`
+The route deliberately authorizes only `localhost` and `127.0.0.1` while the
+development command's local marker is present. This makes local development
+explicit without turning the sample into an unauthenticated production
+endpoint. Replace `authorize`
 with your application's real session check before deploying; production
 requests are denied until you do.
 

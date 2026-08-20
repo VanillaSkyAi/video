@@ -221,7 +221,7 @@ import { templates } from "../vanillasky/server";
 export const handleVideo = createVideoHandler({
   templates,
   authorize: (request) => {
-    if (process.env.NODE_ENV !== "development") return false;
+    if (process.env.VANILLASKY_LOCAL_DEMO !== "1") return false;
     const hostname = new URL(request.url).hostname;
     return hostname === "localhost" || hostname === "127.0.0.1";
   },
@@ -234,8 +234,9 @@ export const handleVideo = createVideoHandler({
 });
 ```
 
-The local-only authorization above is intentionally narrow. Replace it with
-your application's session check before deployment, as shown in
+The local-only authorization above is intentionally narrow. Supply its marker
+only from the development command; replace it with your application's session
+check before deployment, as shown in
 [Getting started](getting-started.md).
 
 Use the browser registry for generation and playback:

@@ -57,7 +57,7 @@ describe("custom template reference journey", () => {
   it("documents local authorization as fail-closed outside development", () => {
     const guide = readFileSync(join(root, "docs/custom-templates.md"), "utf8");
 
-    expect(guide).toContain('if (process.env.NODE_ENV !== "development") return false;');
+    expect(guide).toContain('if (process.env.VANILLASKY_LOCAL_DEMO !== "1") return false;');
     expect(guide).toContain('hostname === "localhost" || hostname === "127.0.0.1"');
     expect(guide).not.toContain(
       'authorize: (request) => new URL(request.url).hostname === "localhost"',

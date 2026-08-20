@@ -32,13 +32,19 @@ describe("canonical provider onboarding", () => {
 
   it("connects the model directly in one fail-closed server route", () => {
     const route = read("src/app/api/video/route.ts");
+    const manifest = JSON.parse(read("package.json")) as {
+      scripts: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
 
     expect(route).toContain('from "@ai-sdk/openai"');
     expect(route).toContain('from "ai"');
     expect(route).toContain('from "@vanillaskyai/video/server"');
     expect(route).toContain("createVideoHandler({");
     expect(route).toContain("streamText:");
-    expect(route).toContain('process.env.NODE_ENV !== "development"');
+    expect(route).toContain('process.env.VANILLASKY_LOCAL_DEMO !== "1"');
+    expect(manifest.scripts.dev).toBe("cross-env VANILLASKY_LOCAL_DEMO=1 next dev");
+    expect(manifest.devDependencies["cross-env"]).toBe("10.1.0");
     expect(route).not.toMatch(/templates,|onWarning:|onComplete:|onError:|providerMetadata/);
   });
 
@@ -73,6 +79,10 @@ describe("canonical provider onboarding", () => {
     expect(verifier).toContain("response.status !== 401");
     expect(verifier).toContain("provider_warning");
     expect(verifier).toContain("credentialForbiddenValues");
+    expect(verifier).toContain("allocateLocalPort");
+    expect(verifier).toContain('assertSavedDuration(page, "8 seconds"');
+    expect(verifier).toContain('scenes?.[0]?.id !== "supplied-opening"');
+    expect(verifier).not.toMatch(/const (?:production|development)Port = 43\d{2}/);
   });
 
   it("keeps live provider acceptance explicitly gated and separate from deterministic CI", () => {
