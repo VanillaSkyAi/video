@@ -84,7 +84,18 @@ function createFixture({ release = "patch" }: { release?: "patch" | "empty" } = 
     "examples/nextjs-quickstart/package.json",
     "tests/fixtures/nextjs-provider-app/package.json",
   ]) json(root, path, { dependencies: { "@vanillaskyai/video": "0.1.0" } });
-  write(root, "CHANGELOG.md", "# Changelog\n\n## 0.1.0\n\nInitial beta release.\n");
+  write(root, "CHANGELOG.md", `# Changelog
+
+Repository release guidance must remain outside version notes.
+
+## Unreleased
+
+<!-- Add release notes here before running release:prepare. -->
+
+## 0.1.0
+
+Initial beta release.
+`);
   write(root, ".changeset/pending-release.md", release === "patch" ? `---
 "@vanillaskyai/video": patch
 ---
@@ -136,7 +147,11 @@ describe("Version Packages generation", () => {
     expect(JSON.parse(readFileSync(join(root, ".changeset/pre.json"), "utf8"))).toEqual({ mode: "pre", tag: "beta" });
     expect(existsSync(join(root, ".changeset/pending-release.md"))).toBe(false);
     expect(readFileSync(join(root, ".changeset/pre/pending-release.md"), "utf8")).toContain("next beta patch");
-    expect(readFileSync(join(root, "CHANGELOG.md"), "utf8")).toMatch(
+    const changelog = readFileSync(join(root, "CHANGELOG.md"), "utf8");
+    expect(changelog).toMatch(
+      /^# Changelog\n\nRepository release guidance must remain outside version notes\.\n\n## Unreleased\n\n<!-- Add release notes here before running release:prepare\. -->\n\n## 0\.1\.1-beta\.0$/m,
+    );
+    expect(changelog).toMatch(
       /^## 0\.1\.1-beta\.0\n\n### Patch Changes\n\n- [a-f0-9]+: Preserve the public package behavior/m,
     );
     expect(readFileSync(join(root, "README.md"), "utf8")).toContain("@vanillaskyai/video@0.1.1-beta.0");
@@ -161,6 +176,7 @@ describe("Version Packages generation", () => {
 
     expect(result).toMatchObject({ changed: false, previousVersion: "0.1.1-beta.0", version: "0.1.1-beta.0" });
     expect(treeSnapshot(root)).toBe(generated);
+    expect(readFileSync(join(root, "CHANGELOG.md"), "utf8").match(/^## Unreleased$/gm)).toHaveLength(1);
   });
 
   it("does not enter prerelease mode when only empty Changesets are pending", () => {

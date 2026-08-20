@@ -1,9 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { assertValidSemver, compareSemver } from "./release-integrity.mjs";
-import { synchronizeVersionSurfaces } from "./version-surfaces.mjs";
-
-const UNRELEASED_PLACEHOLDER = "<!-- Add release notes here before running release:prepare. -->";
+import { synchronizeVersionSurfaces, UNRELEASED_PLACEHOLDER } from "./version-surfaces.mjs";
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { assertChangesetRecordFile, listPendingChangesetPaths } from "./changeset-records.mjs";
-import { synchronizeVersionSurfaces } from "./version-surfaces.mjs";
+import { restoreEmptyUnreleasedChangelog, synchronizeVersionSurfaces } from "./version-surfaces.mjs";
 
 export const VERSION_PACKAGES_BRANCH = "changeset-release/main";
 export const CANONICAL_REPOSITORY = "VanillaSkyAi/video";
@@ -72,7 +72,9 @@ export function generateVersionPackages({
 }) {
   const repositoryRoot = resolve(root);
   const manifestPath = join(repositoryRoot, "package.json");
+  const changelogPath = join(repositoryRoot, "CHANGELOG.md");
   const previousVersion = readJson(manifestPath).version;
+  const previousChangelog = readFileSync(changelogPath, "utf8");
   const pendingRecords = listPendingChangesetPaths({ root: repositoryRoot });
   if (pendingRecords.length === 0) {
     return { changed: false, previousVersion, version: previousVersion };
@@ -99,6 +101,7 @@ export function generateVersionPackages({
   if (version === previousVersion) {
     throw new Error(`Changesets did not advance ${PACKAGE_NAME} from ${previousVersion}`);
   }
+  restoreEmptyUnreleasedChangelog({ root: repositoryRoot, previousChangelog });
   synchronizeVersionSurfaces({
     root: repositoryRoot,
     packageName: PACKAGE_NAME,
