@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import {
   getVideoDuration,
@@ -100,6 +102,18 @@ function setNull(path: readonly string[]): unknown {
 }
 
 describe("persisted Video contract", () => {
+  it("parses the versioned 0.1.0 release fixture", () => {
+    const fixturePath = resolve(import.meta.dirname, "fixtures/persisted-video-0.1.0.json");
+    expect(existsSync(fixturePath)).toBe(true);
+    if (!existsSync(fixturePath)) return;
+
+    const fixture = JSON.parse(readFileSync(fixturePath, "utf8"));
+    const parsed = parseVideo(fixture);
+    expect(parsed).toEqual(fixture);
+    expect(parsed.schemaVersion).toBe("0.1");
+    expect(parsed.scenes).toHaveLength(2);
+  });
+
   it("parses only the current persisted schema and exposes typed failures", () => {
     expect(parseVideo(minimalVideo())).toEqual(minimalVideo());
 

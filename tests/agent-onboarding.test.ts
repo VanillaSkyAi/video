@@ -4,12 +4,13 @@ import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
 const read = (path: string) => readFileSync(resolve(root, path), "utf8");
+const packageVersion = JSON.parse(read("package.json")).version as string;
 
 describe("human and agent onboarding", () => {
   it("offers one obvious package command and one optional agent command", () => {
     const readme = read("README.md");
     const product = readme.indexOf("VanillaSky is the open-source video response layer");
-    const install = readme.indexOf("npm install @vanillaskyai/video@0.1.0 ai @ai-sdk/openai");
+    const install = readme.indexOf(`npm install @vanillaskyai/video@${packageVersion} ai @ai-sdk/openai`);
     const skill = readme.indexOf("npx skills add VanillaSkyAi/video@vanillasky");
 
     expect(product).toBeGreaterThanOrEqual(0);
@@ -29,7 +30,7 @@ describe("human and agent onboarding", () => {
     expect(metadata).toContain("name: vanillasky");
     expect(metadata).toContain("@vanillaskyai/video");
     expect(metadata).not.toMatch(/POC|101|cold-start|evaluation|HyperFrames|Remotion/i);
-    expect(source).toContain("npm install @vanillaskyai/video@0.1.0 ai @ai-sdk/openai");
+    expect(source).toContain(`npm install @vanillaskyai/video@${packageVersion} ai @ai-sdk/openai`);
     expect(source).toContain("createVideoHandler");
     expect(source).toContain("useVideo");
     expect(source).toContain("VideoPlayer");

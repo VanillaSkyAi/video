@@ -37,19 +37,23 @@ remotely. Do not create or push the tag until it passes.
 
 ## Prepare a candidate
 
-Keep `package.json`, `package-lock.json`, and `CHANGELOG.md` on exactly the same
-version. Start from an up-to-date branch, run the complete local dry run, and
-review its deterministic manifest before opening the release pull request:
+Start from an up-to-date release branch with the pinned toolchain. Write the
+candidate notes under `## Unreleased`, then prepare one explicit SemVer target.
+The command promotes those notes and synchronizes the package manifest,
+lockfile, README, public API status, install guides, examples, fixtures, and
+bundled skill. Re-running the same target is idempotent.
 
 ```bash
-npm version patch --no-git-tag-version
-# edit CHANGELOG.md
-npm run release:dry-run
-git add package.json package-lock.json CHANGELOG.md
+npm run release:prepare -- X.Y.Z
+git diff --check
+git diff
+git add --all
 git commit -m "chore: release vX.Y.Z"
+npm run release:dry-run
 ```
 
-The local command makes no tag, registry, GitHub release, or site change. It
+Review the complete diff before committing. The dry run intentionally requires
+a clean committed tree, makes no tag, registry, GitHub release, or site change,
 builds and packs exactly once, computes SHA-512 and SHA-256, and passes that one
 immutable tarball to every artifact-facing verifier. It never repacks between
 the public API, package-size, Vite, Next.js, documented-example, and browser
@@ -57,9 +61,9 @@ gates. The command prints a deterministic `release-manifest.json`; set
 `VANILLASKY_RELEASE_OUTPUT_DIR` to retain the manifest, tarball, and generated
 release notes in a local directory for review. Otherwise they remain temporary.
 
-For a prerelease, use
-`npm version prerelease --preid=beta --no-git-tag-version`. Prereleases publish
-under npm's `next` dist-tag and must be strictly newer than `latest`.
+For a prerelease, pass its complete target, for example
+`npm run release:prepare -- 0.1.1-beta.0`. Prereleases publish under npm's
+`next` dist-tag and must be strictly newer than `latest`.
 
 ## Tag and publish
 
@@ -90,30 +94,10 @@ repairs or mutates an existing release.
 Published npm versions and release assets are immutable. Never overwrite an
 asset or reuse a version for different bytes; fix forward with a new version.
 
-Publish the exact workflow-produced tarball and verify its registry integrity
-before merging the site adoption branch. Never rebuild or repack between npm
-publish and the site handoff: the prepared site lockfile pins those exact bytes,
-and deploying the site before npm publication must fail rather than advertise
-an install command for an unavailable package.
-
-## Complete the website handoff
-
-Every stable release must be adopted by the
-[VanillaSky site](https://github.com/VanillaSkyAi/vanillasky-site) from an
-isolated site branch:
-
-```bash
-npm install @vanillaskyai/video@X.Y.Z --save-exact
-npm run verify:sdk-latest
-npx vanillasky add --all --overwrite
-npx vanillasky sync
-npm run sync:docs
-npm run verify
-```
-
-Commit the exact dependency and lockfile plus regenerated templates and docs.
-Merge only after site CI is green, then verify the production deployment. An
-npm publish is not a completed stable release until this handoff succeeds.
+Publish the exact workflow-produced tarball and verify its registry integrity.
+vanillasky.ai adopts stable npm releases separately through its site-owned
+release process. Site automation, credentials, deployment checks, and adoption
+instructions stay in that private workspace rather than this public SDK.
 
 ## Verify from outside the repository
 

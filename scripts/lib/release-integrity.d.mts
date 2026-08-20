@@ -16,6 +16,12 @@ export function selectPackedArtifact(options: {
 }): PackedArtifactSelection;
 export function createDeterministicReleaseManifest<T>(value: T): Readonly<T>;
 export function assertValidSemver(version: string): string;
+export function parseSemver(version: string): {
+  build: string[];
+  core: string[];
+  prerelease: string[];
+};
+export function compareSemver(leftVersion: string, rightVersion: string): number;
 export function isPrereleaseSemver(version: string): boolean;
 export function assertDistTagsCoherent(
   distTags: { latest?: string; next?: string },

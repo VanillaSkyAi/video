@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "0.1",
+  "orientation": "landscape",
+  "audio": {
+    "trackId": "retained-track",
+    "audioUrl": "https://media.example.test/audio.mp3",
+    "sourceDuration": 14,
+    "duration": 12,
+    "beatDetection": {
+      "sensitivity": 0.7,
+      "targetBeats": 2,
+      "minInterval": 0.5
+    },
+    "beatMarkers": [
+      {
+        "time": 0.5,
+        "manual": true,
+        "energy": "high"
+      },
+      {
+        "time": 4.5,
+        "manual": false,
+        "energy": "low"
+      }
+    ],
+    "volume": 0.8,
+    "fadeOutMs": 1500
+  },
+  "scenes": [
+    {
+      "id": "first",
+      "templateId": "notification",
+      "variables": {
+        "message": "Complete shape",
+        "nested": {
+          "enabled": true,
+          "amount": 3,
+          "empty": null
+        },
+        "list": [
+          "safe",
+          2,
+          false
+        ]
+      },
+      "textArchetype": "cinematic",
+      "backgroundEffect": "drift",
+      "timing": {
+        "startTime": 0,
+        "endTime": 4,
+        "fixedDuration": 4,
+        "durationWeight": 1
+      }
+    },
+    {
+      "id": "second",
+      "templateId": "bigNumber",
+      "variables": {
+        "value": 42
+      },
+      "timing": {
+        "beatStart": 1,
+        "fixedDuration": 3
+      }
+    }
+  ],
+  "style": {
+    "brand": {
+      "font": "Inter",
+      "scriptFont": "Caveat",
+      "background": {
+        "type": "gradient",
+        "colors": [
+          "#8711C1",
+          "#2167E3"
+        ]
+      },
+      "colors": {
+        "primary": "#6D5EF5",
+        "secondary": "#17122F",
+        "foreground": "#FFFFFF",
+        "surface": "#090712",
+        "surfaceElevated": "#231B42",
+        "muted": "#A7A6B0"
+      }
+    },
+    "preset": "editorial",
+    "defaultBackgroundEffect": "slow-zoom-in",
+    "defaultTextArchetype": "subtle",
+    "defaultTransition": "crossfade",
+    "density": "airy",
+    "motion": "calm"
+  },
+  "meta": {
+    "name": "Stored result",
+    "prompt": "Bounded creative direction",
+    "source": "Bounded source",
+    "uploadedMediaUrls": [
+      "https://media.example.test/image.webp"
+    ]
+  }
+}

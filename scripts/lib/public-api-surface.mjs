@@ -3,6 +3,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
+import { compareSemver, parseSemver } from "./release-integrity.mjs";
 
 const NODE_BUILTINS = new Set([
   ...builtinModules,
@@ -15,6 +16,38 @@ const declarationPrinter = ts.createPrinter({
 
 function sorted(values) {
   return [...values].sort((left, right) => left.localeCompare(right));
+}
+
+function simplePeerRange(range) {
+  const bounds = { lower: undefined, upper: undefined };
+  for (const token of String(range).trim().split(/\s+/)) {
+    const match = /^(>=|>|<=|<)(\d+(?:\.\d+){0,2})$/.exec(token);
+    if (!match) return undefined;
+    const version = `${match[2]}.0.0`.split(".").slice(0, 3).join(".");
+    if (match[1].startsWith(">")) bounds.lower = { version, inclusive: match[1] === ">=" };
+    else bounds.upper = { version, inclusive: match[1] === "<=" };
+  }
+  return bounds.lower || bounds.upper ? bounds : undefined;
+}
+
+function peerRangeIncludes(candidateRange, baselineRange) {
+  if (candidateRange === baselineRange) return true;
+  const candidate = simplePeerRange(candidateRange);
+  const baseline = simplePeerRange(baselineRange);
+  if (!candidate || !baseline) return false;
+  if (baseline.lower) {
+    if (candidate.lower) {
+      const comparison = compareSemver(candidate.lower.version, baseline.lower.version);
+      if (comparison > 0 || (comparison === 0 && baseline.lower.inclusive && !candidate.lower.inclusive)) return false;
+    }
+  } else if (candidate.lower) return false;
+  if (baseline.upper) {
+    if (candidate.upper) {
+      const comparison = compareSemver(candidate.upper.version, baseline.upper.version);
+      if (comparison < 0 || (comparison === 0 && baseline.upper.inclusive && !candidate.upper.inclusive)) return false;
+    }
+  } else if (candidate.upper) return false;
+  return true;
 }
 
 function assertEqual(actual, expected, label) {
@@ -309,6 +342,79 @@ export function createPublicApiSignatureReport({ packageRoot, manifestPath }) {
     report[entryName] = inspectDeclaration(resolvedPackageRoot, declarationPath).signatures;
   }
   return report;
+}
+
+export function assertPatchCompatibility({
+  baselineVersion,
+  candidateVersion,
+  baselineManifest,
+  candidateManifest,
+  baselineSignatures,
+  candidateSignatures,
+}) {
+  const baselineSemver = parseSemver(baselineVersion);
+  const candidateSemver = parseSemver(candidateVersion);
+  const versionComparison = compareSemver(candidateVersion, baselineVersion);
+  if (versionComparison < 0) {
+    throw new Error(`Patch candidate ${candidateVersion} must be newer than npm latest ${baselineVersion}`);
+  }
+  if (baselineSemver.core[0] !== candidateSemver.core[0]
+    || baselineSemver.core[1] !== candidateSemver.core[1]) {
+    return { baseline: baselineVersion, candidate: candidateVersion, status: "different-minor" };
+  }
+  for (const entry of Object.keys(baselineManifest.exports ?? {})) {
+    if (!Object.hasOwn(candidateManifest.exports ?? {}, entry)) {
+      throw new Error(`Patch candidate removed package export ${entry}`);
+    }
+  }
+  const baselineNodeEngine = baselineManifest.engines?.node;
+  const candidateNodeEngine = candidateManifest.engines?.node;
+  if (baselineNodeEngine && candidateNodeEngine
+    && !peerRangeIncludes(candidateNodeEngine, baselineNodeEngine)) {
+    throw new Error(`Patch candidate narrowed Node engine from ${baselineNodeEngine} to ${candidateNodeEngine}`);
+  }
+  for (const [peer, baselineRange] of Object.entries(baselineManifest.peerDependencies ?? {})) {
+    const candidateRange = candidateManifest.peerDependencies?.[peer];
+    if (!peerRangeIncludes(candidateRange, baselineRange)) {
+      throw new Error(`Patch candidate changed peer dependency ${peer} from ${baselineRange} to ${candidateRange ?? "removed"}`);
+    }
+    const baselineMeta = baselineManifest.peerDependenciesMeta?.[peer] ?? {};
+    const candidateMeta = candidateManifest.peerDependenciesMeta?.[peer] ?? {};
+    if (JSON.stringify(candidateMeta) !== JSON.stringify(baselineMeta)) {
+      throw new Error(`Patch candidate changed peer dependency metadata for ${peer}`);
+    }
+  }
+  for (const peer of Object.keys(candidateManifest.peerDependencies ?? {})) {
+    if (Object.hasOwn(baselineManifest.peerDependencies ?? {}, peer)) continue;
+    if (candidateManifest.peerDependenciesMeta?.[peer]?.optional !== true) {
+      throw new Error(`Patch candidate added new required peer dependency ${peer}`);
+    }
+  }
+  for (const [entryName, baselineEntry] of Object.entries(baselineSignatures ?? {})) {
+    const candidateEntry = candidateSignatures?.[entryName];
+    if (!candidateEntry) throw new Error(`Patch candidate removed public entry ${entryName}`);
+    for (const [exportName, baselineSignature] of Object.entries(baselineEntry.exports ?? {})) {
+      if (exportName.startsWith("experimental_")) continue;
+      const candidateSignature = candidateEntry.exports?.[exportName];
+      if (!candidateSignature) {
+        throw new Error(`Patch candidate removed public signature ${entryName}.${exportName}`);
+      }
+      if (JSON.stringify(candidateSignature) !== JSON.stringify(baselineSignature)) {
+        throw new Error(`Patch candidate changed public signature ${entryName}.${exportName}`);
+      }
+    }
+    const candidateSupport = new Set(candidateEntry.support ?? []);
+    for (const declaration of baselineEntry.support ?? []) {
+      if (!candidateSupport.has(declaration)) {
+        throw new Error(`Patch candidate changed public signature support for ${entryName}`);
+      }
+    }
+  }
+  return {
+    baseline: baselineVersion,
+    candidate: candidateVersion,
+    status: versionComparison === 0 ? "current-version" : "compatible-patch",
+  };
 }
 
 export async function verifyPublicApiSurface({ packageRoot, manifestPath, signaturePath }) {

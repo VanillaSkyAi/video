@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const root = resolve(import.meta.dirname, "..");
 const example = resolve(root, "examples", "nextjs-quickstart");
 const read = (path: string) => readFileSync(resolve(example, path), "utf8");
+const packageVersion = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).version as string;
 
 describe("canonical provider onboarding", () => {
   it("ships one small OpenAI path without custom-template or persistence setup", () => {
@@ -15,7 +16,7 @@ describe("canonical provider onboarding", () => {
 
     expect(manifest.dependencies).toMatchObject({
       "@ai-sdk/openai": expect.any(String),
-      "@vanillaskyai/video": "0.1.0",
+      "@vanillaskyai/video": packageVersion,
       ai: expect.any(String),
       next: expect.any(String),
       react: expect.any(String),

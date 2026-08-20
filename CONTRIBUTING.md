@@ -35,7 +35,7 @@ video inputs, fixtures, or event logs.
 - [Acceptance](docs/maintainers/acceptance.md) defines the deterministic and live-provider
   quality gates.
 - [Releasing](docs/maintainers/releasing.md) defines versioning, publishing, verification,
-  and the required website handoff.
+  and the boundary with the separate site-owned adoption process.
 
 ## Release checks
 

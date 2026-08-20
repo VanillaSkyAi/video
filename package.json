@@ -112,6 +112,7 @@
     "verify:package-size": "tsx scripts/verify-package-size.ts",
     "verify:api": "npm run build && node scripts/verify-public-api-surface.mjs",
     "verify:package": "npm run build && node scripts/verify-packed-package.mjs",
+    "release:prepare": "node scripts/release-prepare.mjs",
     "release:dry-run": "node scripts/release-dry-run.mjs",
     "release:preflight": "node scripts/release-preflight.mjs",
     "release:check": "npm run verify:api && npm run release:dry-run"

@@ -30,6 +30,14 @@ public API review.
 - Framework adapters are examples, not separate public APIs. The release suite
   verifies current Next.js and Vite production builds.
 
+The automated patch comparison is intentionally conservative. It requires
+exact equality for every existing normalized declaration and reachable support
+declaration because this report cannot distinguish input and output positions
+safely. As a result, even optional field additions to an existing public type
+fail the patch gate; use a pre-1.0 minor release unless a separately reviewed,
+direction-aware compatibility check can prove the change safe. New exports,
+wider supported peer ranges, and new optional peers remain additive.
+
 ## Environment boundaries
 
 | Entry point | Environment | May import React | May import Node built-ins |

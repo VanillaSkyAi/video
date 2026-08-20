@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -17,12 +18,21 @@ const consumer = join(workspace, "consumer");
 const playbackOnlyConsumer = join(workspace, "playback-only-consumer");
 const serverConsumer = join(workspace, "server-consumer");
 const react19Consumer = join(workspace, "react19-consumer");
-mkdirSync(consumer);
-mkdirSync(playbackOnlyConsumer);
-mkdirSync(serverConsumer);
-mkdirSync(react19Consumer);
+const PERSISTED_VIDEO_0_1_0_SHA256 = "eef80e45cd501c3f29a3636d0a0bb34c10da0bf19e205713cedec2bb709bafc4";
 
 try {
+  const persistedVideoFixture = readFileSync(
+    join(root, "tests", "fixtures", "persisted-video-0.1.0.json"),
+    "utf8",
+  );
+  const persistedVideoFixtureSha256 = createHash("sha256").update(persistedVideoFixture).digest("hex");
+  if (persistedVideoFixtureSha256 !== PERSISTED_VIDEO_0_1_0_SHA256) {
+    throw new Error("Persisted 0.1.0 release fixture checksum drifted");
+  }
+  mkdirSync(consumer);
+  mkdirSync(playbackOnlyConsumer);
+  mkdirSync(serverConsumer);
+  mkdirSync(react19Consumer);
   const selectedArtifact = selectPackedArtifact({
     providedPath: process.env.VANILLASKY_PACKED_TARBALL
       ? resolve(process.env.VANILLASKY_PACKED_TARBALL)
@@ -95,6 +105,10 @@ const stored = {
 };
 const parsed = parseVideo(JSON.parse(JSON.stringify(stored)));
 if (getVideoDuration(parsed) !== 4 || !Object.isFrozen(parsed.scenes)) throw new Error("React-free root persistence contract failed");
+const releaseFixture = parseVideo(JSON.parse(process.env.VANILLASKY_PERSISTED_VIDEO_FIXTURE));
+if (releaseFixture.scenes.length !== 2 || releaseFixture.schemaVersion !== "0.1") {
+  throw new Error("Packed parser rejected the persisted 0.1.0 release fixture");
+}
 try {
   parseVideo({ ...stored, schemaVersion: "9.0" });
   throw new Error("Future persisted schema was accepted");
@@ -102,7 +116,11 @@ try {
   if (!(error instanceof VideoValidationError) || error.code !== "unsupported_video_version") throw error;
 }
 `);
-  execFileSync(process.execPath, [join(serverConsumer, "root.mjs")], { cwd: serverConsumer, stdio: "inherit" });
+  execFileSync(process.execPath, [join(serverConsumer, "root.mjs")], {
+    cwd: serverConsumer,
+    stdio: "inherit",
+    env: { ...process.env, VANILLASKY_PERSISTED_VIDEO_FIXTURE: persistedVideoFixture },
+  });
   writeFileSync(join(serverConsumer, "server.mjs"), `
 import { createVideoHandler } from "@vanillaskyai/video/server";
 let completed;

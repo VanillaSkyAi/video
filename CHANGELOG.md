@@ -2,6 +2,10 @@
 
 VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
+## Unreleased
+
+<!-- Add release notes here before running release:prepare. -->
+
 ## 0.1.0
 
 Initial beta release for `@vanillaskyai/video`.

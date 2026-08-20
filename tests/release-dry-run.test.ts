@@ -13,10 +13,24 @@ const packageManifest = JSON.parse(readFileSync(resolve(root, "package.json"), "
 describe("local release dry run", () => {
   it("locks the fresh package identity and deterministic local entry point", () => {
     expect(packageManifest.name).toBe("@vanillaskyai/video");
-    expect(packageManifest.version).toBe("0.1.0");
+    expect(packageManifest.version).toMatch(/^0\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
     expect(packageManifest.packageManager).toBe("npm@11.17.0");
     expect(packageManifest.scripts["release:dry-run"]).toBe("node scripts/release-dry-run.mjs");
     expect(existsSync(resolve(root, "scripts", "release-dry-run.mjs"))).toBe(true);
+  });
+
+  it("validates the release toolchain before allocating temporary output", () => {
+    const orchestrator = readFileSync(resolve(root, "scripts", "release-dry-run.mjs"), "utf8");
+
+    expect(orchestrator.indexOf("assertReleaseToolchain({"))
+      .toBeLessThan(orchestrator.indexOf("const temporaryRoot = mkdtempSync"));
+  });
+
+  it("creates the npm execution guard inside temporary-workspace cleanup protection", () => {
+    const orchestrator = readFileSync(resolve(root, "scripts", "release-dry-run.mjs"), "utf8");
+
+    expect(orchestrator.indexOf("try {"))
+      .toBeLessThan(orchestrator.indexOf("createReleaseNpmGuard({ workspace: temporaryRoot })"));
   });
 
   it("packs once and passes both immutable hashes to every artifact gate", () => {
@@ -111,6 +125,6 @@ describe("local release dry run", () => {
   it("keeps the packaged public API status publication-neutral", () => {
     const publicApi = readFileSync(resolve(root, "PUBLIC-API.md"), "utf8");
     expect(publicApi).not.toMatch(/\bunpublished\b/i);
-    expect(publicApi).toContain("Status: frozen public beta contract for `0.1.0`.");
+    expect(publicApi).toContain(`Status: frozen public beta contract for \`${packageManifest.version}\`.`);
   });
 });
