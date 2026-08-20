@@ -88,20 +88,13 @@ installed tarball. Stable releases require package, tag, changelog, artifact,
 and public-site coherence. The site owns its private adoption workflow; keep
 its automation and credentials out of this public SDK repository.
 
-Every ordinary pull request must add a Changeset. Package-affecting work names
-`@vanillaskyai/video` with a `patch`, `minor`, or `major` bump; repository-only
-tooling, tests, workflows, governance, and maintainer documentation use an
-empty Changeset. The generated `changeset-release/main` branch is the only
-exception. CI must prove its canonical same-repository identity, exact GitHub
-metadata, deterministic generated-commit identity and one-commit shape from the
-exact `main` base, and byte-for-byte reproducible generated tree. Base-owned
-pending Changeset files, `.changeset/pre.json`, and `.changeset/pre/*.md`
-evidence remain immutable on every ordinary branch.
+Record customer-visible changes under `## Unreleased` in `CHANGELOG.md` in the
+pull request that makes them; repository-only tooling, tests, workflows,
+governance, and maintainer documentation need no entry.
 
-The Version Packages workflow prepares beta candidate files but does not
-publish, tag, or create its pull request. A normal authenticated maintainer or
-agent opens that PR. After that reviewed PR merges, the annotated tag publisher
-accepts only the exact current `origin/main` commit and publishes through OIDC.
+Releases are a reviewed version-bump pull request followed by an annotated tag
+on the merged commit. The tag publisher accepts only the exact current
+`origin/main` commit and publishes through OIDC.
 
 A breaking change, including a pre-1.0 minor, requires explicit approval from
 Joris before implementation or merge. Breaking-change notes and migration

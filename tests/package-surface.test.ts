@@ -69,7 +69,7 @@ describe("public package surface", () => {
     expect(existsSync(join(root, "site"))).toBe(false);
     expect(existsSync(join(root, "wrangler.toml"))).toBe(false);
     expect(Object.keys(manifest.scripts).filter((name) => name.startsWith("site:"))).toEqual([]);
-    expect(manifest.scripts["release:check"]).not.toContain("site:");
+    expect(manifest.scripts["release:build"]).not.toContain("site:");
     for (const maintainerFile of [
       "docs/maintainers/acceptance.md",
       "AGENTS.md",

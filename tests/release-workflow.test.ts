@@ -27,7 +27,7 @@ describe("release workflow", () => {
     const workflow = readFileSync(".github/workflows/release.yml", "utf8");
 
     expect(workflow).toContain("id: artifact");
-    expect(workflow).toContain("npm run release:dry-run -- --ci");
+    expect(workflow).toContain("npm run release:build -- --ci");
     expect(workflow).toContain("VANILLASKY_PACKED_TARBALL: ./release-assets/${{ needs.verify.outputs.artifact-filename }}");
     expect(workflow).toContain("VANILLASKY_EXPECTED_INTEGRITY: ${{ needs.verify.outputs.integrity }}");
     expect(workflow).toContain('npm publish "./release-assets/${{ needs.verify.outputs.artifact-filename }}" --provenance --access public --tag latest');
@@ -84,8 +84,7 @@ describe("release workflow", () => {
     expect(workflow).toContain("needs: repository-identity");
     expect(workflow).not.toMatch(/^\s+if:\s+github\.repository\s*==/m);
     expect(workflow).toContain("VANILLASKY_APPROVED_BRANCH: origin/main");
-    expect(workflow).toContain("VANILLASKY_RELEASE_MODE: tag");
-    expect(workflow).toContain("release:dry-run -- --ci");
+    expect(workflow).toContain("release:build -- --ci");
     expect(workflow).toContain("verify-release-integrity.mjs dist-tags");
     expect(workflow).toContain("verify-release-integrity.mjs dist-tags-transition");
     expect(workflow.indexOf("verify-release-integrity.mjs dist-tags-transition"))
@@ -116,35 +115,28 @@ describe("release workflow", () => {
     );
   });
 
-  it("builds the candidate on the host and isolates published browser verification", () => {
+  it("packs on the host and isolates published browser verification", () => {
     const workflow = readFileSync(".github/workflows/release.yml", "utf8");
-    const releaseDryRun = readFileSync("scripts/release-dry-run.mjs", "utf8");
     const verifyJob = workflow.split("  verify:")[1].split("  publish-npm:")[0];
     const publishedJob = workflow.split("  verify-published:")[1].split("  publish-github-release:")[0];
     const image = "mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07";
 
     expect(verifyJob).not.toContain("container:");
-    expect(verifyJob).toContain("npx playwright install chromium");
+    // The tag job packs a commit CI already verified; it must not re-run the suite.
+    expect(verifyJob).not.toContain("playwright install");
+    expect(verifyJob).not.toContain("npm test");
     expect(publishedJob).toContain(`image: ${image}`);
     expect(publishedJob).toContain("options: --init --ipc=host --user pwuser");
     expect(publishedJob).not.toContain("playwright install");
-    expect(releaseDryRun).toContain(
-      '? ["run", "browser:test", "--", "--project=chromium"]',
-    );
   });
 
-  it("documents a repeatable preflight for every new release tag", () => {
+  it("documents a repeatable path for every new release tag", () => {
     const guide = readFileSync("docs/maintainers/releasing.md", "utf8");
-    const preflight = readFileSync("scripts/release-preflight.mjs", "utf8");
-    const manifest = JSON.parse(readFileSync("package.json", "utf8"));
 
-    expect(manifest.scripts["release:preflight"]).toBe("node scripts/release-preflight.mjs");
-    expect(guide).toContain("npm run release:preflight");
     expect(guide).toContain("VanillaSkyAi/video");
     expect(guide).toMatch(/before creating.*tag/is);
     expect(guide).not.toContain("VanillaSkyAi/vanillasky-sdk");
     expect(guide).not.toMatch(/fresh repository|first[- ]release/i);
-    expect(preflight).toContain('"ls-remote", "--exit-code", "--tags", "origin"');
     expect(guide).toMatch(/publish.*exact.*tarball[\s\S]*site/i);
   });
 
@@ -204,7 +196,7 @@ describe("release workflow", () => {
   it("pins every CI action to the reviewed v7 commit", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
     const actions = [...workflow.matchAll(/uses:\s+(actions\/(?:checkout|setup-node))@([^\s]+)/g)];
-    expect(actions).toHaveLength(14);
+    expect(actions).toHaveLength(12);
     for (const [, action, revision] of actions) {
       expect(revision, action).toMatch(/^[a-f0-9]{40}$/);
     }
@@ -229,7 +221,7 @@ describe("release workflow", () => {
     expect(browserJob).not.toContain("playwright install");
     expect(workflow.match(/npx playwright test(?:\s|$)/g)).toHaveLength(1);
     expect(workflow).not.toContain("matrix.browser");
-    expect(workflow.match(/timeout-minutes:/g)).toHaveLength(7);
+    expect(workflow.match(/timeout-minutes:/g)).toHaveLength(6);
   });
 
   it("enforces the live npm-latest public API comparison in pull-request CI", () => {

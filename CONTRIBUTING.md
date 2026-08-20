@@ -30,39 +30,18 @@ source.
 Provider credentials and customer secrets must never enter browser bundles,
 video inputs, fixtures, or event logs.
 
-## Changesets
+## Change notes
 
-Every pull request must add a Changeset file. For package behavior, bundled
-source, public package documentation, or package metadata, run:
-
-```bash
-npm run changeset
-```
-
-Select `@vanillaskyai/video` and choose `patch`, `minor`, or `major`. Use
-`npm run changeset -- --empty` for repository-only tooling, tests, workflows,
-maintainer documentation, or governance. The generated
-`changeset-release/main` branch is the sole exception. CI accepts it only from
-the canonical repository into `main`, with the deterministic generated-commit
-identity and shape plus a byte-reproducible tree generated from the exact PR base.
-Start each Changeset body with a one-line summary; put details and any migration
-headings after a blank line. Before opening a pull request, commit the Changeset
-and run:
-
-```bash
-npm run changeset:status
-npm run changeset:check
-```
+Record customer-visible changes under `## Unreleased` in `CHANGELOG.md` as part
+of the pull request that makes them. Repository-only tooling, tests, workflows,
+governance, and maintainer documentation need no changelog entry. Releases
+promote that section into a version heading; see
+[Releasing](docs/maintainers/releasing.md).
 
 A breaking change, including a pre-1.0 minor, requires explicit approval from
 Joris before implementation or merge. Breaking-change notes and migration
 evidence are required context, but migration evidence does not count as
 approval.
-
-Pending Changesets are immutable after merge. The Version Packages workflow
-consumes them on a dedicated beta candidate branch; contributors and ordinary
-pull requests never edit or remove them. That immutability also covers the beta
-mode in `.changeset/pre.json` and generated `.changeset/pre/*.md` evidence.
 
 ## Maintainer guides
 
@@ -74,10 +53,7 @@ mode in `.changeset/pre.json` and generated `.changeset/pre/*.md` evidence.
 ## Release checks
 
 The published SDK supports Node 20 and newer. CI runs the full SDK/runtime test
-suite and build on Node 20, 22, and 24. The pinned `@changesets/cli@3.0.1`
-release tool itself supports `^22.11 || ^24 || >=26`, so only tests that spawn
-that CLI are skipped on Node 20. The required Node 22 `verify` job always runs
-those real-CLI integration tests; the Node 20 job does not omit any SDK/runtime
+suite and build on Node 20, 22, and 24. The Node 20 job does not omit any SDK/runtime
 test file.
 
 CI also verifies React 18 and 19, and Chromium, Firefox, and WebKit.
