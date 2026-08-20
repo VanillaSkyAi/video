@@ -22,6 +22,23 @@ describe("release toolchain", () => {
     expect(changesetsCliSupportsNode("26.0.0")).toBe(true);
   });
 
+  it.each([
+    "22.11",
+    "22.11.0-garbage",
+    "22.11.0.1",
+    "022.11.0",
+    "22.011.0",
+    "22.11.00",
+    "26.0.0junk",
+    "v22.11.0",
+    " 22.11.0",
+    "9007199254740992.0.0",
+    "22.9007199254740992.0",
+    "22.11.9007199254740992",
+  ])("rejects malformed Changesets CLI Node version %s", (version) => {
+    expect(changesetsCliSupportsNode(version)).toBe(false);
+  });
+
   it("exposes one shared exact-version assertion", async () => {
     const module = await import("../scripts/lib/release-toolchain.mjs");
 
