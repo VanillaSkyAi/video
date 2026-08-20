@@ -47,7 +47,7 @@ describe("fresh 0.1 candidate cleanup", () => {
     const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 
     expect(manifest.name).toBe("@vanillaskyai/video");
-    expect(manifest.version).toBe("0.1.0");
+    expect(manifest.version).toMatch(/^0\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
     expect(manifest.packageManager).toBe("npm@11.17.0");
     expect(manifest.repository).toEqual({
       type: "git",
@@ -127,13 +127,14 @@ describe("fresh 0.1 candidate cleanup", () => {
     expect(guide).toContain("npm run registry:check");
   });
 
-  it("starts a concise beta changelog at 0.1.0 without historical migration prose", () => {
+  it("keeps an Unreleased queue above the current beta release", () => {
     const changelog = readFileSync(join(root, "CHANGELOG.md"), "utf8");
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
     const releaseHeadings = [...changelog.matchAll(/^##\s+([^\s]+)$/gm)].map((match) => match[1]);
 
-    expect(releaseHeadings).toEqual(["0.1.0"]);
+    expect(releaseHeadings[0]).toBe("Unreleased");
+    expect(releaseHeadings).toContain(manifest.version);
     expect(changelog).toMatch(/beta/i);
-    expect(changelog).not.toMatch(/migration|previous version|historical|legacy/i);
   });
 
   it("documents issue support without a response-time SLA", () => {

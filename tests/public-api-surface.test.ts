@@ -75,4 +75,27 @@ describe("frozen public API surface", () => {
     expect(verifier).toContain('"@types/react@18"');
     expect(verifier).toContain('"node_modules", "@vanillaskyai", "video"');
   });
+
+  it("compares patch candidates with the published npm latest contract", () => {
+    const verifier = readFileSync(resolve(root, "scripts/verify-public-api-surface.mjs"), "utf8");
+
+    expect(verifier).toContain("assertPatchCompatibility");
+    expect(verifier).toContain('"@vanillaskyai/video@latest"');
+    expect(verifier).toContain('"view", "@vanillaskyai/video@latest", "version", "--json"');
+    expect(verifier).toContain('const baselineSpecifier = `${packageName}@${baselineVersion}`');
+    expect(verifier).toContain("baselineManifest.version !== baselineVersion");
+    expect(verifier).not.toContain('"@vanillaskyai/video@latest", "react@18"');
+    expect(verifier).not.toContain("if (candidateVersion === baselineVersion)");
+    expect(verifier).toContain("createPublicApiSignatureReport");
+    expect(verifier).toContain("baselinePackageRoot");
+    expect(verifier).toContain("candidateVersion");
+  });
+
+  it("documents the conservative limit of normalized signature comparison", () => {
+    const publicApi = readFileSync(resolve(root, "PUBLIC-API.md"), "utf8");
+
+    expect(publicApi).toContain("intentionally conservative");
+    expect(publicApi).toContain("optional field additions");
+    expect(publicApi).toContain("input and output positions");
+  });
 });

@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 describe("packed package verification", () => {
@@ -14,6 +15,27 @@ describe("packed package verification", () => {
     expect(script).toContain("selectedArtifact.integrity");
     expect(script).toContain('join(packageRoot, "docs", "persistence.md")');
     expect(script).toContain('join(consumer, "persistence-example.tsx")');
+  });
+
+  it("replays the immutable 0.1.0 persisted fixture through the packed parser", () => {
+    const script = readFileSync(new URL("../scripts/verify-packed-package.mjs", import.meta.url), "utf8");
+    const fixture = readFileSync(new URL("fixtures/persisted-video-0.1.0.json", import.meta.url));
+
+    expect(script).toContain('"fixtures", "persisted-video-0.1.0.json"');
+    expect(script).toContain("VANILLASKY_PERSISTED_VIDEO_FIXTURE");
+    expect(script).toContain("parseVideo(JSON.parse(process.env.VANILLASKY_PERSISTED_VIDEO_FIXTURE))");
+    expect(script).toContain("PERSISTED_VIDEO_0_1_0_SHA256");
+    expect(createHash("sha256").update(fixture).digest("hex"))
+      .toBe("eef80e45cd501c3f29a3636d0a0bb34c10da0bf19e205713cedec2bb709bafc4");
+  });
+
+  it("enters cleanup protection before reading fixtures or creating consumer directories", () => {
+    const script = readFileSync(new URL("../scripts/verify-packed-package.mjs", import.meta.url), "utf8");
+    const cleanupBoundary = script.indexOf("try {");
+
+    expect(cleanupBoundary).toBeGreaterThanOrEqual(0);
+    expect(cleanupBoundary).toBeLessThan(script.indexOf("const persistedVideoFixture = readFileSync"));
+    expect(cleanupBoundary).toBeLessThan(script.indexOf("mkdirSync(consumer)"));
   });
 
   it("compiles the exact documented custom-template replay example", () => {

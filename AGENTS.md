@@ -84,9 +84,9 @@ product decision.
 
 Quickstarts are executable product surfaces. Prefer one complete application
 over fragments requiring hidden glue, and compile marked snippets from the
-installed tarball. Stable releases require package/tag/changelog/artifact/site
-coherence and the full website handoff described in
-`docs/maintainers/releasing.md`.
+installed tarball. Stable releases require package, tag, changelog, artifact,
+and public-site coherence. The site owns its private adoption workflow; keep
+its automation and credentials out of this public SDK repository.
 
 Never publish, tag, create a release, move dist-tags, modify production secrets,
 or deploy as an implicit side effect of a local verification task.

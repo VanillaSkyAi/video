@@ -78,7 +78,7 @@ export function createDeterministicReleaseManifest(value) {
   return deepFreeze(canonicalize(value));
 }
 
-function parseSemver(version) {
+export function parseSemver(version) {
   const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+([0-9A-Za-z.-]+))?$/.exec(version ?? "");
   if (!match) throw new Error(`Invalid semantic version: ${version}`);
   const prerelease = match[4]?.split(".") ?? [];
@@ -100,7 +100,7 @@ function compareNumericIdentifier(left, right) {
   return left < right ? -1 : 1;
 }
 
-function compareSemver(leftVersion, rightVersion) {
+export function compareSemver(leftVersion, rightVersion) {
   const left = parseSemver(leftVersion);
   const right = parseSemver(rightVersion);
   for (let index = 0; index < 3; index += 1) {

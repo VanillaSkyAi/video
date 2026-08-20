@@ -24,18 +24,23 @@ import {
   isPrereleaseSemver,
 } from "./lib/release-integrity.mjs";
 import { createReleaseNpmGuard } from "./lib/release-npm-guard.mjs";
+import { assertReleaseToolchain } from "./lib/release-toolchain.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const expectedRepository = "VanillaSkyAi/video";
+const expectedPackage = "@vanillaskyai/video";
+const expectedNpm = "11.17.0";
+assertReleaseToolchain({
+  nodeVersion: process.versions.node,
+  npmVersion: execFileSync("npm", ["--version"], { encoding: "utf8" }).trim(),
+});
 const temporaryRoot = mkdtempSync(join(tmpdir(), "vanillasky-release-dry-run-"));
 const requestedOutput = process.env.VANILLASKY_RELEASE_OUTPUT_DIR;
 const outputDirectory = requestedOutput ? resolve(requestedOutput) : join(temporaryRoot, "release-assets");
 const ciMode = process.argv.includes("--ci");
 const manifestOnly = process.argv.includes("--manifest-only");
-const expectedRepository = "VanillaSkyAi/video";
-const expectedPackage = "@vanillaskyai/video";
-const expectedNpm = "11.17.0";
 const consumerResults = {};
-const releaseNpmGuard = createReleaseNpmGuard({ workspace: temporaryRoot });
+let releaseNpmGuard;
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -183,6 +188,7 @@ function writeGitHubOutputs(values) {
 
 let keepOutput = Boolean(requestedOutput);
 try {
+  releaseNpmGuard = createReleaseNpmGuard({ workspace: temporaryRoot });
   const source = verifySourceCoherence();
   if (requestedOutput && existsSync(outputDirectory)) {
     throw new Error("VANILLASKY_RELEASE_OUTPUT_DIR must name a new directory");

@@ -9,7 +9,7 @@ describe("public package surface", () => {
     const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
     const readme = readFileSync(join(root, "README.md"), "utf8");
 
-    expect(manifest.version).toBe("0.1.0");
+    expect(manifest.version).toMatch(/^0\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
     expect(manifest.description).toMatch(/video response SDK/i);
     expect(readme).toMatch(/Status: Beta/);
   });
@@ -60,6 +60,9 @@ describe("public package surface", () => {
   it("keeps the website in its standalone repository and ships documentation only", () => {
     const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
     const workflow = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8");
+    const releasing = readFileSync(join(root, "docs/maintainers/releasing.md"), "utf8");
+    const addingTemplate = readFileSync(join(root, "docs/maintainers/adding-template.md"), "utf8");
+    const contributing = readFileSync(join(root, "CONTRIBUTING.md"), "utf8");
     const eslintConfig = readFileSync(join(root, "eslint.config.js"), "utf8");
     const gitignore = readFileSync(join(root, ".gitignore"), "utf8");
 
@@ -81,5 +84,20 @@ describe("public package surface", () => {
     expect(eslintConfig).not.toContain("site/");
     expect(gitignore).not.toContain("site/");
     expect(existsSync(join(root, "docs/studio-handoff.md"))).toBe(false);
+    expect(releasing).toContain("vanillasky.ai adopts stable npm releases separately");
+    expect(releasing).not.toContain("VanillaSkyAi/vanillasky-site");
+    expect(releasing).not.toContain("verify:sdk-latest");
+    expect(addingTemplate).toContain("site-owned process");
+    expect(contributing).toContain("site-owned adoption process");
+    expect(contributing).not.toContain("required website handoff");
+    for (const privateSiteDetail of [
+      "`vanillasky-site`",
+      "VANILLASKY_SDK_SOURCE",
+      "verify:sdk-latest",
+      "sync:docs",
+      "public/template-thumbnails",
+    ]) {
+      expect(addingTemplate).not.toContain(privateSiteDetail);
+    }
   });
 });

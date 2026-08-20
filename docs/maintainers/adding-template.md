@@ -1,26 +1,16 @@
 # Adding a built-in template
 
-Built-ins are public SDK contracts. Author them in the SDK, inspect them through
-the site's localhost-only workbench, and publish them only after the complete
-distribution surface is consistent. The workbench is a visual editor and brief
-generator; it is not a second source of truth.
+Built-ins are public SDK contracts. Author them in the SDK and publish them only
+after the complete distribution surface is consistent. Visual review can
+produce a structured design brief, but the SDK remains the only source of truth.
 
-## 1. Turn a workbench brief into an SDK branch
+## 1. Turn a design brief into an SDK branch
 
-1. In `vanillasky-site`, run the workbench against the SDK checkout you intend
-   to change:
-
-   ```bash
-   VANILLASKY_SDK_SOURCE=/absolute/path/to/video npm run dev
-   ```
-
-2. Open `http://localhost:5173/dev/templates`, select the closest existing
-   template, try representative variables and timing, and export its validated
-   `vanillasky.template-edit-brief/v1` JSON. For a new built-in, treat the brief
-   as a design reference and give the agent the proposed camelCase ID, intended
-   job, variable contract, source facts, both orientations, and motion/timing
-   acceptance criteria.
-3. Give the brief to the coding agent and create an isolated SDK worktree from
+1. Start with a validated `vanillasky.template-edit-brief/v1` JSON document. For
+   a new built-in, treat the brief as a design reference and include the
+   proposed camelCase ID, intended job, variable contract, source facts, both
+   orientations, and motion/timing acceptance criteria.
+2. Give the brief to the coding agent and create an isolated SDK worktree from
    current remote `main`:
 
    ```bash
@@ -125,26 +115,15 @@ npm run build
 For a release-facing change, complete `npm run release:check`; repository-local
 tests alone do not verify the packed consumer surface.
 
-## 5. Pass the visual gates in the local site workbench
+## 5. Pass the visual gates
 
-Restart the site with `VANILLASKY_SDK_SOURCE` pointing at the feature worktree.
-The workbench header must show that source path and its Git revision. Inspect
-defaults, realistic data, edge data, and edited variables at the minimum and
-preferred durations.
-
-Capture native frames at 25%, 60%, 85%, and 100% in both orientations. Example:
-
-```text
-/dev/templates?template=<id>&orientation=portrait&fixture=realistic&progress=25&capture=1&duration=<preferred>
-/dev/templates?template=<id>&orientation=landscape&fixture=realistic&progress=25&capture=1&duration=<preferred>
-```
-
-Repeat with progress `60`, `85`, and `100`, waiting for
-`#template-capture-frame[data-capture-ready="true"]`. Approval requires readable
-copy, safe margins, no overflow, meaningful motion at the intermediate frames,
-a clean exit at 100%, and enough hold time to read every required field. Record
-the SDK commit, fixture, duration, dimensions, browser/page errors, and captures
-with the PR evidence.
+Visual review runs through a separate site-owned process. Inspect defaults,
+realistic data, edge data, and edited variables at the minimum and preferred
+durations. Capture native frames at 25%, 60%, 85%, and 100% in both
+orientations. Approval requires readable copy, safe margins, no overflow,
+meaningful motion at the intermediate frames, a clean exit at 100%, and enough
+hold time to read every required field. Record the SDK commit, fixture,
+duration, dimensions, browser/page errors, and captures with the PR evidence.
 
 For a transition-enabled template, also capture the configured
 `entryReadyProgress` and `holdProgress` in both orientations. Verify exact
@@ -152,27 +131,15 @@ grounded terminal values at raw and motion progress `1`, verify that the local
 exit runs between the readable hold and terminal frame, and verify the 300 ms
 incoming/outgoing overlap against a contiguous neighboring scene.
 
-## 6. Merge, publish, and hand off to the site
+## 6. Merge and publish
 
 Open the SDK PR, wait for all CI jobs, merge, and follow
 [`releasing.md`](./releasing.md). Do not publish from this authoring workflow;
 publish only the chosen stable version through the documented tagged release.
 
-After npm reports that exact version as `latest`, use a separate site worktree:
-
-```bash
-npm install @vanillaskyai/video@X.Y.Z --save-exact
-npm run verify:sdk-latest
-npx vanillasky add --all --overwrite
-npx vanillasky sync
-npm run sync:docs
-npm run verify
-```
-
-Add or replace `public/template-thumbnails/<id>.webp` using an approved native
-workbench frame, then verify the docs card and hover preview. Commit the exact
-SDK pin, lockfile, regenerated `vanillasky/` source, synced docs, and thumbnail;
-merge only after site CI passes and verify the production deployment.
+After npm reports that exact version as `latest`, vanillasky.ai adopts the
+stable package separately through its site-owned process. The public SDK does
+not contain the private adoption workflow or deployment configuration.
 
 ## Why authoring remains agent-driven
 
