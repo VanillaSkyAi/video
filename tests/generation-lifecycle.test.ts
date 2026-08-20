@@ -39,6 +39,7 @@ describe("typed generation lifecycle", () => {
     const completed: VideoGenerationSummary[] = [];
     const handler = createVideoHandler({
       authorize: "none",
+      requireCloser: false,
       heartbeatMs: false,
       includeRawProviderData: true,
       onComplete: (summary) => completed.push(summary),
@@ -94,6 +95,7 @@ describe("typed generation lifecycle", () => {
     let summary: VideoGenerationSummary | undefined;
     const handler = createVideoHandler({
       authorize: "none",
+      requireCloser: false,
       heartbeatMs: false,
       onComplete: (value) => { summary = value; },
       streamText: () => ({
@@ -136,7 +138,8 @@ describe("typed generation lifecycle", () => {
       const internalErrors: Error[] = [];
       const completed: VideoGenerationSummary[] = [];
       const handler = createVideoHandler({
-      authorize: "none",
+        authorize: "none",
+        requireCloser: false,
         heartbeatMs: false,
         onError: (error) => internalErrors.push(error),
         onComplete: (summary) => completed.push(summary),
@@ -167,6 +170,7 @@ describe("typed generation lifecycle", () => {
     const completed: VideoGenerationSummary[] = [];
     const handler = createVideoHandler({
       authorize: "none",
+      requireCloser: false,
       heartbeatMs: false,
       onComplete: (summary) => completed.push(summary),
       streamText: () => ({
@@ -187,6 +191,7 @@ describe("typed generation lifecycle", () => {
     let summary: VideoGenerationSummary | undefined;
     const handler = createVideoHandler({
       authorize: "none",
+      requireCloser: false,
       heartbeatMs: false,
       includeRawProviderData: true,
       onWarning: (warning) => warnings.push(warning),
@@ -223,6 +228,7 @@ describe("typed generation lifecycle", () => {
     const counts = { warning: 0, error: 0, complete: 0 };
     const handler = createVideoHandler({
       authorize: "none",
+      requireCloser: false,
       heartbeatMs: false,
       invalidPartBehavior: "drop",
       async onWarning() { counts.warning += 1; throw new Error("warning callback secret"); },
@@ -250,6 +256,7 @@ describe("typed generation lifecycle", () => {
     let summary: VideoGenerationSummary | undefined;
     const handler = createVideoHandler({
       authorize: "none",
+      requireCloser: false,
       heartbeatMs: false,
       onWarning: (warning) => {
         warning.message = "authorization=callback-secret";
@@ -283,6 +290,7 @@ describe("typed generation lifecycle", () => {
     const completed = vi.fn<(summary: VideoGenerationSummary) => void>();
     const handler = createVideoHandler({
       authorize: "none",
+      requireCloser: false,
       heartbeatMs: false,
       invalidPartBehavior: "drop",
       onComplete: completed,
@@ -376,6 +384,7 @@ describe("typed generation lifecycle", () => {
     const huge = "x".repeat(100_000);
     const handler = createVideoHandler({
       authorize: "none",
+      requireCloser: false,
       heartbeatMs: false,
       includeRawProviderData: true,
       onComplete: (value) => { summary = value; },
@@ -404,6 +413,7 @@ describe("typed generation lifecycle", () => {
       raw?: unknown;
     }>();
     expectTypeOf<VideoHandlerOptions>().toHaveProperty("invalidPartBehavior");
+    expectTypeOf<VideoHandlerOptions>().toHaveProperty("requireCloser");
     // @ts-expect-error Callback-like selector names are intentionally unsupported.
     expectTypeOf<VideoHandlerOptions>().toHaveProperty("onInvalidPart");
   });

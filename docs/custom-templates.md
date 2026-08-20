@@ -311,9 +311,9 @@ Templates whose core proof needs a real statistic can add
 `"x-vanillasky": { "requiresStat": true }`. See the structured-data and
 supplied-media references for complete examples.
 
-The automatic `opening` uses the built-in `notification` variables (`appName`
-and `message`). If you replace `notification` while using automatic openings,
-keep that variable contract.
+The automatic `opening` uses the built-in `media` variables (`texts` and
+`mediaType: "gradient"`). If you replace `media` while using automatic
+openings, keep that variable contract.
 
 ## What belongs where
 

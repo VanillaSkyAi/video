@@ -5,6 +5,7 @@ import {
   simulateVideoStream,
   videoFixtures,
 } from "../src/test";
+import type { MockVideoStreamPart } from "../src/test/types";
 
 async function collect<T>(source: AsyncIterable<T>): Promise<T[]> {
   const values: T[] = [];
@@ -32,6 +33,21 @@ function eventsFromSse(body: string): Array<Record<string, unknown>> {
 }
 
 describe("public deterministic test kit", () => {
+  it("types planner-only closer placement in mock provider parts", () => {
+    const part = {
+      type: "scene.add",
+      placement: "closer",
+      scene: {
+        id: "ending",
+        templateId: "confetti",
+        variables: { texts: "The grounded story reaches its conclusion" },
+        timing: { fixedDuration: 3 },
+      },
+    } satisfies MockVideoStreamPart;
+
+    expect(part.placement).toBe("closer");
+  });
+
   it("exposes only the three frozen runtime values", async () => {
     expect(Object.keys(await import("../src/test")).sort()).toEqual([
       "createMockVideoPlanner",
@@ -172,6 +188,7 @@ describe("public deterministic test kit", () => {
     const privateErrors: Error[] = [];
     const handler = createVideoHandler({
       authorize: "none",
+      requireCloser: false,
       heartbeatMs: false,
       onError: (error) => privateErrors.push(error),
       streamText: createMockVideoPlanner({ scenario: "providerFailure" }),
@@ -251,6 +268,7 @@ describe("public deterministic test kit", () => {
   it("plugs directly into createVideoHandler and emits validated SSE", async () => {
     const handler = createVideoHandler({
       authorize: "none",
+      requireCloser: false,
       heartbeatMs: false,
       streamText: createMockVideoPlanner(),
     });

@@ -807,9 +807,9 @@ createRoot(document.getElementById("root")).render(createElement("main", null,
       motion: Number(element.getAttribute("data-motion-progress")),
     }));
     if (!Number.isFinite(settledProgress.raw) || !Number.isFinite(settledProgress.motion)
-      || settledProgress.raw <= 0 || settledProgress.raw >= 1
-      || Math.abs(settledProgress.raw - settledProgress.motion) > 0.0005) {
-      throw new Error("React 19 settled scene did not resume its complete template timeline");
+      || settledProgress.raw <= 0.7 || settledProgress.raw >= 1
+      || settledProgress.motion !== 0.7) {
+      throw new Error("React 19 settled final scene did not preserve the readable hold frame");
     }
     const activeTransientSemantic = transitionCase.locator('[data-scene-layer="active"] [data-transition-semantic="transient"]');
     if (await activeTransientSemantic.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).visibility) !== "visible") {

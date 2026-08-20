@@ -83,6 +83,13 @@ The model never returns React, HTML, CSS, or executable JavaScript.
 Generated `scene.add`, `scene.patch`, and `asset.patch` operations all pass
 through the same merged-scene validation before the player sees them.
 
+The standard planner contract requires one `scene.add` with
+`placement: "closer"` immediately after the first playable body scene. The
+model writes short grounded conclusion copy: a supplied action when one
+exists, otherwise a declarative payoff that answers the story's “so what.” The
+runtime holds the closer and emits it last, so a long body plan cannot displace
+an ending that was already generated.
+
 ## What reaches the LLM
 
 The provider adapter receives:

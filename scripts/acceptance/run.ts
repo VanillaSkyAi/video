@@ -53,15 +53,18 @@ export async function runAcceptanceFixture({
   validateScene,
 }: RunAcceptanceFixtureOptions): Promise<AcceptanceFixtureResult> {
   const startedAt = performance.now();
+  const requestedTemplates = capabilities ?? fixture.replayParts
+    .filter((part) => part.type === "scene.add")
+    .map((part) => part.scene.templateId);
   const run = createVideo(fixture.input, {
     generate,
     selectAudio,
-    capabilities: { templates: capabilities ?? [
-      "notification",
-      ...fixture.replayParts
-        .filter((part) => part.type === "scene.add")
-        .map((part) => part.scene.templateId),
-    ] },
+    capabilities: {
+      templates: [...new Set([
+        ...(fixture.input.opening?.trim() ? ["media"] : []),
+        ...requestedTemplates,
+      ])],
+    },
     validateScene,
   });
   const events: TimedVideoEvent[] = [];

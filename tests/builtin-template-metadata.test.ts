@@ -96,6 +96,7 @@ describe("built-in template metadata", () => {
     expect(byId.get("confetti")?.jobs).toEqual(["payoff", "punctuation"]);
     expect(byId.get("emojiBurst")?.jobs).toEqual(["payoff", "punctuation"]);
     expect(byId.get("reaction")?.jobs).toEqual(["payoff", "punctuation"]);
+    expect(byId.get("brandMessage")?.jobs).toEqual(["claim"]);
   });
 
   it("requires resolved media and grounded actions for media-dependent payoff and closer templates", () => {

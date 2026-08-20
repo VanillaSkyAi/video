@@ -35,7 +35,9 @@ try {
 `response.error` or `response.abort` rejects it. The hook still retains the
 latest validated `video.video`, and its player stream still receives terminal
 events, so an application may keep already accepted scenes visible while it
-offers a retry.
+offers a retry. If the planner already supplied a validated reserved closer,
+the runtime appends it to that playable terminal snapshot before reporting a
+late provider failure; it never invents or rewrites closer copy during recovery.
 
 Both a server `response.abort` and an explicit `video.abort(reason)` keep
 `video.status` at `aborted`; `video.error` contains the same safe typed abort

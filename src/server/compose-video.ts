@@ -75,12 +75,12 @@ function buildInitialConfig(
   const rawScenes: VideoScene[] = openingText
     ? [{
         id: "supplied-opening",
-        templateId: "notification",
+        templateId: "media",
         variables: {
-          appName: input.brand?.name ?? "",
-          message: openingText,
+          texts: openingText,
+          mediaType: "gradient",
         },
-        timing: { fixedDuration: 5 },
+        timing: { fixedDuration: 3 },
       }]
     : [];
   const scenes: VideoScene[] = [];
@@ -179,10 +179,50 @@ function createOmittedForCloserWarning(sceneId: string): VideoWarning {
   return {
     code: "scene_omitted_for_closer",
     category: "readability",
-    message: "Scene was omitted because the final action must remain the last scene.",
+    message: "Scene was omitted because the reserved closer must remain the last scene.",
     sceneId,
     recoverable: true,
   };
+}
+
+function createDuplicateCloserWarning(): VideoWarning {
+  return {
+    code: "scene_omitted_for_closer",
+    category: "readability",
+    message: "An additional closer was omitted because the first valid closer is already reserved.",
+    recoverable: true,
+  };
+}
+
+function createIncompletePlanWarning(): VideoWarning {
+  return {
+    code: "plan_incomplete",
+    category: "provider",
+    message: "The planner stopped at a length limit; some requested scenes or the ending may be missing.",
+    recoverable: true,
+  };
+}
+
+function createMissingCloserWarning(): VideoWarning {
+  return {
+    code: "plan_missing_closer",
+    category: "provider",
+    message: "The planner completed without a valid closer; the video may end on a body scene.",
+    recoverable: true,
+  };
+}
+
+function pendingCloserReserve(
+  scene: VideoScene,
+  getTemplatePacing: CreateVideoOptions["getTemplatePacing"],
+): number {
+  const metadata = getTemplatePacing?.(scene.templateId);
+  const readableMinimum = getReadableSceneDuration(scene, metadata);
+  const explicitRange = scene.timing.startTime != null && scene.timing.endTime != null
+    ? Math.max(0, scene.timing.endTime - scene.timing.startTime)
+    : undefined;
+  const requested = explicitRange ?? scene.timing.fixedDuration ?? metadata?.preferredDuration ?? readableMinimum;
+  return Math.max(readableMinimum, requested);
 }
 
 function sceneSlotDuration(scene: VideoScene): number {
@@ -212,8 +252,8 @@ export function createVideo(
 ): VideoRun {
   validateInput(input);
   if (input.opening?.trim() && options.capabilities?.templates != null &&
-    !options.capabilities.templates.includes("notification")) {
-    throw new Error("Scene template notification was not negotiated");
+    !options.capabilities.templates.includes("media")) {
+    throw new Error("Scene template media was not negotiated");
   }
   const requestId = options.requestId ?? createId("request");
   const runId = options.runId ?? createId("run");
@@ -319,6 +359,15 @@ export function createVideo(
         resolveResult(finalState);
       }
     };
+    let planCompleted = false;
+    let generatedSceneCount = 0;
+    let runtimeDurationLimited = false;
+    let pendingCloser: VideoScene | undefined;
+    const deferredForCloser: VideoScene[] = [];
+    let plannerReportedLength = false;
+    let closerCommitted = false;
+    let missingCloser = false;
+    let finishReason: "stop" | "length" | "content-filter" | "other" = "stop";
 
     try {
       yield emit(events.create("response.start", {
@@ -340,13 +389,6 @@ export function createVideo(
         }));
       }
 
-      let planCompleted = false;
-      let generatedSceneCount = 0;
-      let runtimeDurationLimited = false;
-      let askAccepted = false;
-      const deferredForCloser: VideoScene[] = [];
-      let plannerReportedLength = false;
-      let finishReason: "stop" | "length" | "content-filter" | "other" = "stop";
       const systemPrompt = options.systemPrompt ??
         (await import("./prompts/system-prompt.js")).DEFAULT_VIDEO_SYSTEM_PROMPT;
       const context = { request, systemPrompt, userPrompt, initialConfig, signal: controller.signal };
@@ -365,24 +407,32 @@ export function createVideo(
             !options.capabilities.templates.includes(part.scene.templateId)) {
             throw new Error(`Scene template ${part.scene.templateId} was not negotiated`);
           }
-          if (askAccepted) {
-            runtimeDurationLimited = true;
-            rejectedSceneCount += 1;
-            yield emit(events.create("response.warning", {
-              warning: createOmittedForCloserWarning(part.scene.id),
-            }));
-            continue;
-          }
           options.validateScene?.(part.scene, {
             input,
             previousScenes: state.config?.scenes ?? [],
           });
           const templatePacing = options.getTemplatePacing?.(part.scene.templateId);
           const isAskCandidate = templatePacing?.jobs?.includes("ask") === true;
+          const isPayoffCandidate = templatePacing?.jobs?.includes("payoff") === true;
+          if (part.placement === "closer" && templatePacing && !isAskCandidate && !isPayoffCandidate) {
+            throw new Error(`Scene template ${part.scene.templateId} cannot be used as a closer`);
+          }
+          const isCloserCandidate = part.placement === "closer" || isAskCandidate;
+          if (isCloserCandidate) {
+            if (pendingCloser) {
+              rejectedSceneCount += 1;
+              yield emit(events.create("response.warning", {
+                warning: createDuplicateCloserWarning(),
+              }));
+            } else {
+              pendingCloser = part.scene;
+            }
+            continue;
+          }
           // Once a body scene is held for the optional closer, hold later body
           // scenes too. Otherwise a shorter later scene could commit first and
           // the recovery pass would silently reorder the planner's narrative.
-          if (deferredForCloser.length && !isAskCandidate) {
+          if (deferredForCloser.length) {
             deferredForCloser.push(part.scene);
             continue;
           }
@@ -390,7 +440,9 @@ export function createVideo(
             previousScenes: state.config?.scenes ?? [],
             audio: state.config?.audio,
             maxDurationSec: input.maxDurationSec ?? 30,
-            closerReserveSec,
+            closerReserveSec: pendingCloser
+              ? pendingCloserReserve(pendingCloser, options.getTemplatePacing)
+              : closerReserveSec,
             getTemplatePacing: options.getTemplatePacing,
           });
           if (!paced.scene) {
@@ -406,16 +458,6 @@ export function createVideo(
             continue;
           }
           const scene = paced.scene;
-          const isAsk = isAskCandidate;
-          if (isAsk && deferredForCloser.length) {
-            runtimeDurationLimited = true;
-            for (const deferred of deferredForCloser.splice(0)) {
-              rejectedSceneCount += 1;
-              yield emit(events.create("response.warning", {
-                warning: createOmittedForCloserWarning(deferred.id),
-              }));
-            }
-          }
           for (const warning of paced.warnings) {
             yield emit(events.create("response.warning", { warning }));
           }
@@ -427,13 +469,28 @@ export function createVideo(
             position: state.config?.scenes.length ?? 0,
             revision: 0,
           }));
-          if (isAsk) {
-            askAccepted = true;
-          }
           generatedSceneCount += 1;
           acceptedSceneCount += 1;
           timeToFirstSceneMs ??= Math.max(0, now() - startedAt);
           } else if (part.type === "scene.patch") {
+          if (pendingCloser?.id === part.sceneId) {
+            const nextPendingCloser = {
+              ...pendingCloser,
+              ...part.patch,
+              variables: part.patch.variables
+                ? { ...pendingCloser.variables, ...part.patch.variables }
+                : pendingCloser.variables,
+              timing: part.patch.timing
+                ? { ...pendingCloser.timing, ...part.patch.timing }
+                : pendingCloser.timing,
+            };
+            options.validateScene?.(nextPendingCloser, {
+              input,
+              previousScenes: state.config?.scenes ?? [],
+            });
+            pendingCloser = nextPendingCloser;
+            continue;
+          }
           const scenes = state.config?.scenes ?? [];
           const sceneIndex = scenes.findIndex((scene) => scene.id === part.sceneId);
           if (sceneIndex < 0) throw new Error(`Scene ${part.sceneId} does not exist`);
@@ -471,7 +528,9 @@ export function createVideo(
               previousScenes: scenes.slice(0, sceneIndex),
               audio: state.config?.audio,
               maxDurationSec: input.maxDurationSec ?? 30,
-              closerReserveSec,
+              closerReserveSec: pendingCloser
+                ? pendingCloserReserve(pendingCloser, options.getTemplatePacing)
+                : closerReserveSec,
               getTemplatePacing: options.getTemplatePacing,
             });
             if (!pacedPatch.scene) {
@@ -515,6 +574,18 @@ export function createVideo(
             patch,
           }));
           } else if (part.type === "asset.patch") {
+          if (pendingCloser?.id === part.sceneId) {
+            const nextPendingCloser = {
+              ...pendingCloser,
+              variables: { ...pendingCloser.variables, ...part.variables },
+            };
+            options.validateScene?.(nextPendingCloser, {
+              input,
+              previousScenes: state.config?.scenes ?? [],
+            });
+            pendingCloser = nextPendingCloser;
+            continue;
+          }
           const scenes = state.config?.scenes ?? [];
           const scene = scenes.find((item) => item.id === part.sceneId);
           if (!scene) throw new Error(`Scene ${part.sceneId} does not exist`);
@@ -558,7 +629,39 @@ export function createVideo(
           yield errorEvent;
           } else if (part.type === "plan.complete") {
             if (planCompleted) throw new Error("The planner emitted plan.complete more than once");
-            if (!askAccepted && deferredForCloser.length) {
+            if (pendingCloser) {
+              if (deferredForCloser.length) runtimeDurationLimited = true;
+              for (const deferred of deferredForCloser.splice(0)) {
+                rejectedSceneCount += 1;
+                yield emit(events.create("response.warning", {
+                  warning: createOmittedForCloserWarning(deferred.id),
+                }));
+              }
+              const pacedCloser = paceScene(pendingCloser, {
+                previousScenes: state.config?.scenes ?? [],
+                audio: state.config?.audio,
+                maxDurationSec: input.maxDurationSec ?? 30,
+                closerReserveSec: 0,
+                getTemplatePacing: options.getTemplatePacing,
+              });
+              for (const warning of pacedCloser.warnings) {
+                yield emit(events.create("response.warning", { warning }));
+              }
+              if (pacedCloser.scene) {
+                yield emit(events.create("scene.add", {
+                  scene: pacedCloser.scene,
+                  position: state.config?.scenes.length ?? 0,
+                  revision: 0,
+                }));
+                generatedSceneCount += 1;
+                acceptedSceneCount += 1;
+                timeToFirstSceneMs ??= Math.max(0, now() - startedAt);
+                closerCommitted = true;
+              } else {
+                runtimeDurationLimited = true;
+                rejectedSceneCount += 1;
+              }
+            } else if (deferredForCloser.length) {
               for (const deferred of deferredForCloser.splice(0)) {
                 const recovered = paceScene(deferred, {
                   previousScenes: state.config?.scenes ?? [],
@@ -588,8 +691,21 @@ export function createVideo(
                 timeToFirstSceneMs ??= Math.max(0, now() - startedAt);
               }
             }
+            if (options.requireCloser && !closerCommitted) {
+              missingCloser = true;
+              yield emit(events.create("response.warning", {
+                warning: createMissingCloserWarning(),
+              }));
+            }
             planCompleted = true;
-            finishReason = runtimeDurationLimited ? "length" : part.finishReason ?? "stop";
+            const reportedFinishReason = part.finishReason ?? "stop";
+            finishReason = runtimeDurationLimited
+              ? "length"
+              : reportedFinishReason !== "stop"
+                ? reportedFinishReason
+                : missingCloser
+                  ? "other"
+                  : "stop";
             plannerReportedLength = part.finishReason === "length";
             continue;
           }
@@ -628,6 +744,11 @@ export function createVideo(
       if (plannerReportedLength && generatedSceneCount === 0) {
         throw new Error("The planner was truncated before adding a generated scene");
       }
+      if (plannerReportedLength) {
+        yield emit(events.create("response.warning", {
+          warning: createIncompletePlanWarning(),
+        }));
+      }
       if (!state.config?.scenes.length) throw new Error("The planner completed without adding a scene");
       // The documented persistence boundary must accept every completed value.
       // Validate and detach the terminal snapshot before it reaches SSE.
@@ -664,6 +785,28 @@ export function createVideo(
         return;
       }
       try {
+        if (pendingCloser && !closerCommitted && state.config?.scenes.length) {
+          const pacedCloser = paceScene(pendingCloser, {
+            previousScenes: state.config.scenes,
+            audio: state.config.audio,
+            maxDurationSec: input.maxDurationSec ?? 30,
+            closerReserveSec: 0,
+            getTemplatePacing: options.getTemplatePacing,
+          });
+          for (const warning of pacedCloser.warnings) {
+            yield emit(events.create("response.warning", { warning }));
+          }
+          if (pacedCloser.scene) {
+            yield emit(events.create("scene.add", {
+              scene: pacedCloser.scene,
+              position: state.config.scenes.length,
+              revision: 0,
+            }));
+            generatedSceneCount += 1;
+            acceptedSceneCount += 1;
+            closerCommitted = true;
+          }
+        }
         const provider = await settleProviderLifecycle();
         for (const warning of provider.warnings) {
           if (!state.warnings.some((existing) => existing.code === warning.code && existing.message === warning.message)) {

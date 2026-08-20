@@ -28,14 +28,17 @@ Bound request bytes and reject secret-shaped fields on the server. Do not pass p
 
 ## Opening
 
-When supplied, `opening` becomes a deterministic five-second `notification`
-scene emitted before provider work. The SDK owns its scene ID, template, variables,
-and timing so callers only provide the copy. It should:
+When supplied, `opening` becomes a deterministic `media` scene emitted before
+provider work. It contains only the supplied sentence and explicitly uses the
+brand gradient without stock media. The SDK requests a three-second opening,
+then applies its normal readability and overall-duration budget. It owns the
+scene ID, template, variables, and timing so callers only provide the copy. It
+should:
 
 - be personal or situational enough to feel intentional;
 - require no network media lookup;
 - remain true if generation later fails;
-- fit comfortably in both supported orientations;
+- be one concise sentence that fits comfortably in both supported orientations;
 - be part of the final story, not a spinner disguised as a scene.
 
 Omit `opening` when the generated story should begin with its first planned scene.

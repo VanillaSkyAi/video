@@ -5,7 +5,7 @@
 Install VanillaSky:
 
 ```bash
-npm install @vanillaskyai/video@0.1.1 ai @ai-sdk/openai
+npm install @vanillaskyai/video@0.2.0 ai @ai-sdk/openai
 ```
 
 Set your provider key in `.env.local` (never commit it):
@@ -49,7 +49,7 @@ The local bypass is intentionally fail-closed: it accepts only localhost while
 Next.js is in development and denies every production request. Replace it with
 your real session validation before deploying. For literal files and commands,
 use the tested
-[`examples/nextjs-quickstart` directory](https://github.com/VanillaSkyAi/video/tree/v0.1.1/examples/nextjs-quickstart).
+[`examples/nextjs-quickstart` directory](https://github.com/VanillaSkyAi/video/tree/v0.2.0/examples/nextjs-quickstart).
 
 `model` can come from any AI SDK provider, registry, gateway, compatible API,
 or custom implementation. The application can choose a cheaper or faster model
@@ -90,10 +90,12 @@ reactive UI.
 
 `video.status` is `idle`, `streaming`, `complete`, `error`, or `aborted`.
 `video.video` is the latest deterministic video, and `video.warnings` contains
-bounded typed diagnostics safe to show or branch on. Provider limits and
-content filters are available to the server through the `onComplete` summary;
-surface that server-owned state separately if completeness matters to your
-product.
+bounded typed diagnostics safe to show or branch on. A playable response that
+stops at a planner length limit includes a `plan_incomplete` warning because
+requested scenes or the ending may be missing. Provider finish reasons and
+content-filter details remain available to the server through the `onComplete`
+summary; surface that server-owned state separately when completeness matters
+to your product.
 
 Persist a completed `Video` as JSON and play it later without another model
 request:

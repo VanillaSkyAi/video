@@ -58,8 +58,7 @@
       "tier": "free",
       "register": "card-led",
       "jobs": [
-        "claim",
-        "payoff"
+        "claim"
       ],
       "useWhen": "A direct one-to-one thank-you, invitation, promise, or concise launch note is the point.",
       "textCanvas": "open",

@@ -1,6 +1,6 @@
 # Give your AI a video output
 
-![Version 0.1.1 beta](https://img.shields.io/badge/version-0.1.1_beta-7c3aed)
+![Version 0.2.0 beta](https://img.shields.io/badge/version-0.2.0_beta-7c3aed)
 
 **VanillaSky is the open-source video response layer.** Turn text, structured
 data, and live application context into personalized video responses that start
@@ -17,7 +17,7 @@ the planning prompt, trusted templates, validation, streaming, and player.
 For humans:
 
 ```bash
-npm install @vanillaskyai/video@0.1.1 ai @ai-sdk/openai
+npm install @vanillaskyai/video@0.2.0 ai @ai-sdk/openai
 ```
 
 For coding agents:
@@ -70,6 +70,10 @@ The local authorization denies every production request. Replace it before
 deploying. The model can come from OpenAI, Anthropic, an AI SDK registry or
 gateway, or any compatible streaming adapter.
 
+For planner-selected image and video backgrounds, configure the optional
+server-only `resolveMedia` callback described in
+[Media and soundtrack audio](docs/media-and-audio.md#media-providers).
+
 ## Generate a video
 
 Call the route from React and render the player:
@@ -101,7 +105,7 @@ shows each complete, validated scene as soon as it is ready and returns a
 deterministic `Video` object when generation finishes.
 
 A copy-and-run app is in
-[`examples/nextjs-quickstart`](https://github.com/VanillaSkyAi/video/tree/v0.1.1/examples/nextjs-quickstart).
+[`examples/nextjs-quickstart`](https://github.com/VanillaSkyAi/video/tree/v0.2.0/examples/nextjs-quickstart).
 
 ## Shape the response
 

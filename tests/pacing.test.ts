@@ -12,6 +12,24 @@ function scene(variables: Record<string, unknown>, fixedDuration = 4): VideoScen
 }
 
 describe("deterministic scene pacing", () => {
+  it("holds a short opening beat for at least three seconds when the budget permits", () => {
+    const opening = paceScene(scene({ message: "Ready" }, 1), {
+      previousScenes: [],
+      maxDurationSec: 10,
+      closerReserveSec: 0,
+      getTemplatePacing: () => ({ minDuration: 1, preferredDuration: 1 }),
+    });
+    const followUp = paceScene(scene({ message: "Next" }, 1), {
+      previousScenes: opening.scene ? [opening.scene] : [],
+      maxDurationSec: 10,
+      closerReserveSec: 0,
+      getTemplatePacing: () => ({ minDuration: 1, preferredDuration: 1 }),
+    });
+
+    expect(opening.scene?.timing).toMatchObject({ startTime: 0, endTime: 3, fixedDuration: 3 });
+    expect(followUp.scene?.timing).toMatchObject({ startTime: 3, endTime: 4, fixedDuration: 1 });
+  });
+
   it.each([
     [
       "words",

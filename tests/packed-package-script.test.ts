@@ -96,7 +96,8 @@ describe("packed package verification", () => {
     expect(script).toContain("React 19 shared background incorrectly crossfaded scene layers");
     expect(script).toContain("React 19 shared background did not preserve native template motion");
     expect(script).toContain("await page.clock.fastForward(600)");
-    expect(script).toContain("React 19 settled scene did not resume its complete template timeline");
+    expect(script).toContain("React 19 settled final scene did not preserve the readable hold frame");
+    expect(script).toContain("settledProgress.motion !== 0.7");
     expect(script).toContain("Math.abs(progress.raw - progress.motion)");
     expect(script).toContain("Packed transition exposed transient placeholder semantics");
     expect(script).toContain("--vanillasky-transition-semantic-visibility, visible");

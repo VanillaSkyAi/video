@@ -52,15 +52,15 @@ describe("VideoInput", () => {
       opening: "  Your activation update is ready.  ",
       maxDurationSec: 12,
     }, {
-      capabilities: { templates: ["notification"] },
+      capabilities: { templates: ["media"] },
       generate: complete,
     });
 
     expect(response.initialConfig.scenes).toEqual([{
       id: "supplied-opening",
-      templateId: "notification",
-      variables: { appName: "", message: "Your activation update is ready." },
-      timing: { fixedDuration: 5, startTime: 0, endTime: 5 },
+      templateId: "media",
+      variables: { texts: "Your activation update is ready.", mediaType: "gradient" },
+      timing: { fixedDuration: 3, startTime: 0, endTime: 3 },
     }]);
     expect(buildVideoUserPrompt(response.request.input)).toContain(
       "The host has already added the opening scene",

@@ -70,7 +70,8 @@
       "register": "motion-led",
       "jobs": [
         "setup",
-        "atmosphere"
+        "atmosphere",
+        "payoff"
       ],
       "useWhen": "A visual hook, scenic beat, or concrete product-context line benefits from immersive media.",
       "textCanvas": "open",

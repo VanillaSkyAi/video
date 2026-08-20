@@ -12,7 +12,8 @@ export const GENERATED_BUILTIN_TEMPLATE_CATALOG = [
     "family": "Media & motion",
     "jobs": [
       "setup",
-      "atmosphere"
+      "atmosphere",
+      "payoff"
     ],
     "register": "motion-led",
     "useWhen": "A visual hook, scenic beat, or concrete product-context line benefits from immersive media.",
@@ -2410,8 +2411,7 @@ export const GENERATED_BUILTIN_TEMPLATE_CATALOG = [
     "description": "A single iMessage-style outgoing bubble floats over media or a brand gradient.",
     "family": "Social & messaging",
     "jobs": [
-      "claim",
-      "payoff"
+      "claim"
     ],
     "register": "card-led",
     "useWhen": "A direct one-to-one thank-you, invitation, promise, or concise launch note is the point.",

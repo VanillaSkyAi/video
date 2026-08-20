@@ -222,11 +222,14 @@ export function VideoFrame({
     ? Math.round(clamp01((time - blendStart) / blendDuration) * 1_000_000) / 1_000_000
     : 0;
   const progress = rawProgress;
-  // A template owns every instant of its declared duration. Transitions may
-  // pre-mount the next scene at its true initial frame, but never advance,
-  // clamp, or shorten the template's 0→1 motion clock.
-  const motionProgress = afterEnd && activeTiming
-    ? activeTiming.holdProgress
+  // Body scenes own their complete 0→1 motion lifecycle so they can exit into
+  // the next beat. A terminal scene has nowhere to exit to: once it reaches
+  // its authored poster pose, hold that pose through the end instead of
+  // fading out and then snapping back when playback stops. Raw progress still
+  // reaches 1 so semantic values and background playback finish normally.
+  const isFinalScene = activeIndex === timeline.length - 1;
+  const motionProgress = isFinalScene && activeTiming
+    ? Math.min(rawProgress, activeTiming.holdProgress)
     : rawProgress;
   const canvas = getDimensions(config.orientation);
   const scale = Math.min(width / canvas.width, height / canvas.height);

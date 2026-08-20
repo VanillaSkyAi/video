@@ -194,6 +194,7 @@ describe("VideoPlayer", () => {
       templates: createRenderTemplateRegistry({ templates: [] }),
       stream: response.stream,
       width: 360,
+      playbackMode: "manual",
     }));
 
     const cover = await view.findByTestId("video-generation-cover");
@@ -202,9 +203,293 @@ describe("VideoPlayer", () => {
     expect(cover.style.background).toContain("#241F54");
     expect(cover.style.background).toContain("#17122F");
     expect(cover.style.fontFamily).toBe('Inter, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif');
+    const coverStart = view.getByRole("button", { name: "Play video response" });
+    expect(coverStart.style.top).toBe("50%");
 
     releasePlanner();
+    await waitFor(() => expect(view.getByTestId("video-player").getAttribute("data-scenes")).toBe("1"));
+    expect(view.getByTestId("video-generation-cover")).toBe(cover);
+    expect(view.getByRole("button", { name: "Play video response" })).toBe(coverStart);
+  });
+
+  it("uses the first template's authored hold pose for the static start poster", async () => {
+    const { VideoPlayer } = await import("../src/player/video-player");
+    const templates = createRenderTemplateRegistry({ templates: [defineTemplate({
+      id: "posterProbe",
+      usesGlobalTransition: true,
+      transitionTiming: { entryReadyProgress: 0.2, holdProgress: 0.7 },
+      schema: { type: "object", properties: {}, additionalProperties: false },
+      component: ({ progress, motionProgress }) => createElement("span", {
+        "data-testid": "poster-probe",
+        "data-progress": progress.toFixed(3),
+        "data-motion-progress": (motionProgress ?? progress).toFixed(3),
+      }),
+    })] });
+    const video: Video = {
+      schemaVersion: "0.1",
+      orientation: "portrait",
+      scenes: [{
+        id: "intro",
+        templateId: "posterProbe",
+        variables: {},
+        timing: { fixedDuration: 4 },
+      }],
+      style: TEST_VIDEO_STYLE,
+    };
+
+    const view = render(createElement(VideoPlayer, { video, templates, autoPlay: false }));
+    const poster = view.getByTestId("poster-probe");
+    expect(poster.getAttribute("data-progress")).toBe("0.700");
+    expect(poster.getAttribute("data-motion-progress")).toBe("0.700");
+  });
+
+  it("arms sound playback from the generation cover and starts when scene one arrives", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    let releaseFirstScene!: () => void;
+    const firstSceneGate = new Promise<void>((resolve) => { releaseFirstScene = resolve; });
+    const { VideoPlayer } = await import("../src/player/video-player");
+    const response = createVideo({
+      input: "Activation improved from 41% to 58%.",
+      audio: { src: "data:audio/wav;base64,UklGRg==" },
+    }, {
+      generate: async function* () {
+        await firstSceneGate;
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "first",
+            templateId: "bigNumber",
+            variables: { texts: "Activation", value: 58, label: "percent" },
+            timing: { fixedDuration: 3 },
+          },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+    const view = render(createElement(VideoPlayer, {
+      templates: createRenderTemplateRegistry({ templates: [] }),
+      stream: response.stream,
+      playbackMode: "autoplay-after-interaction",
+    }));
+    const player = view.getByTestId("video-player");
+
+    await waitFor(() => expect(view.container.querySelector("audio")).not.toBeNull());
+    expect(view.getByTestId("video-generation-cover")).toBeDefined();
+    fireEvent.click(view.getByRole("button", { name: "Play video with sound" }));
+    expect(play).toHaveBeenCalled();
+    expect(player.getAttribute("data-start-requested")).toBe("true");
+    expect(player.getAttribute("data-intro-playing")).toBe("true");
+    expect(player.getAttribute("data-playing")).toBe("true");
+    expect(view.queryByText("Starts when the first scene is ready…")).toBeNull();
+
+    const nativeSetTimeout = globalThis.setTimeout;
+    let releaseIntro: (() => void) | undefined;
+    let introDelay = 0;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((callback: TimerHandler, delay?: number, ...args: unknown[]) => {
+      if (typeof callback === "function" && typeof delay === "number" && delay >= 2_900) {
+        releaseIntro = callback as () => void;
+        introDelay = delay;
+        return 1 as unknown as ReturnType<typeof setTimeout>;
+      }
+      return nativeSetTimeout(callback, delay, ...args);
+    }) as typeof setTimeout);
+
+    releaseFirstScene();
+    await waitFor(() => expect(player.getAttribute("data-scenes")).toBe("1"));
+    expect(view.getByTestId("video-generation-cover")).toBeDefined();
+    expect(player.getAttribute("data-current-time")).toBe("0.000");
+    expect(introDelay).toBeGreaterThanOrEqual(2_900);
+    act(() => releaseIntro?.());
+    await waitFor(() => expect(player.getAttribute("data-playing")).toBe("true"));
     await waitFor(() => expect(view.queryByTestId("video-generation-cover")).toBeNull());
+    expect(player.getAttribute("data-current-time")).toBe("0.000");
+    expect(player.getAttribute("data-start-poster")).toBe("false");
+  });
+
+  it("keeps the generation intro visible after scene one arrives and starts it with sound", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    let releasePlanner!: () => void;
+    const plannerGate = new Promise<void>((resolve) => { releasePlanner = resolve; });
+    const { VideoPlayer } = await import("../src/player/video-player");
+    const response = createVideo({
+      input: "Activation improved from 41% to 58%.",
+      audio: { src: "data:audio/wav;base64,UklGRg==" },
+    }, {
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "first",
+            templateId: "bigNumber",
+            variables: { texts: "Activation", value: 58, label: "percent" },
+            timing: { fixedDuration: 3 },
+          },
+        };
+        await plannerGate;
+        yield { type: "plan.complete" as const };
+      },
+    });
+    const view = render(createElement(VideoPlayer, {
+      templates: createRenderTemplateRegistry({ templates: [] }),
+      stream: response.stream,
+      playbackMode: "manual",
+    }));
+    const player = view.getByTestId("video-player");
+
+    await waitFor(() => expect(player.getAttribute("data-scenes")).toBe("1"));
+    expect(player.getAttribute("data-status")).toBe("streaming");
+    expect(player.getAttribute("data-current-time")).toBe("0.000");
+    expect(player.getAttribute("data-playing")).toBe("false");
+    expect(view.getByTestId("video-generation-cover")).toBeDefined();
+    expect(view.container.querySelector("audio")?.muted).toBe(false);
+    expect(view.getAllByRole("button", { name: "Play video with sound" })).toHaveLength(1);
+
+    fireEvent.click(view.getByRole("button", { name: "Play video with sound" }));
+    expect(play).toHaveBeenCalled();
+    await waitFor(() => expect(player.getAttribute("data-playing")).toBe("true"));
+    expect(player.getAttribute("data-intro-playing")).toBe("true");
+    expect(view.getByTestId("video-generation-cover")).toBeDefined();
+    releasePlanner();
+  });
+
+  it("uses the supplied gradient opening as the poster and starts it with sound", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    let releasePlanner!: () => void;
+    const plannerGate = new Promise<void>((resolve) => { releasePlanner = resolve; });
+    const { VideoPlayer } = await import("../src/player/video-player");
+    const response = createVideo({
+      input: "Activation improved from 41% to 58%.",
+      opening: "Your activation update is ready.",
+      audio: { src: "data:audio/wav;base64,UklGRg==" },
+    }, {
+      generate: async function* () {
+        await plannerGate;
+        yield { type: "plan.complete" as const };
+      },
+    });
+    const view = render(createElement(VideoPlayer, {
+      templates: createRenderTemplateRegistry({ templates: [] }),
+      stream: response.stream,
+      playbackMode: "manual",
+    }));
+
+    const player = view.getByTestId("video-player");
+    await waitFor(() => expect(player.getAttribute("data-scenes")).toBe("1"));
+    expect(view.queryByTestId("video-generation-cover")).toBeNull();
+    expect(view.container.querySelector('[data-template-id="media"]')).not.toBeNull();
+    expect(view.container.textContent).toContain("Your activation update is ready.");
+    expect(player.getAttribute("data-current-time")).toBe("0.000");
+    expect(player.getAttribute("data-start-poster")).toBe("true");
+    const start = view.getByRole("button", { name: "Play video with sound" });
+    expect(start.style.top).toBe("50%");
+    fireEvent.click(start);
+    expect(play).toHaveBeenCalled();
+    expect(player.getAttribute("data-generation-intro-complete")).toBe("true");
+    expect(player.getAttribute("data-intro-playing")).toBe("false");
+    expect(player.getAttribute("data-playing")).toBe("true");
+    expect(player.getAttribute("data-start-poster")).toBe("false");
+    releasePlanner();
+  });
+
+  it("autoplays later streams with sound after the viewer starts the first one", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    const { VideoPlayer } = await import("../src/player/video-player");
+    const kit = createRenderTemplateRegistry({ templates: [] });
+    const first = createVideo({
+      input: "First",
+      audio: { src: "data:audio/wav;base64,UklGRg==" },
+    }, {
+      generate: async function* () {
+        yield { type: "scene.add" as const, scene: { id: "first", templateId: "customer", variables: {}, timing: { fixedDuration: 3 } } };
+        yield { type: "plan.complete" as const };
+      },
+    });
+    const view = render(createElement(VideoPlayer, {
+      templates: kit,
+      stream: first.stream,
+      playbackMode: "autoplay-after-interaction",
+    }));
+    const player = view.getByTestId("video-player");
+
+    await waitFor(() => expect(player.getAttribute("data-status")).toBe("complete"));
+    expect(player.getAttribute("data-playing")).toBe("false");
+    fireEvent.click(view.getByRole("button", { name: "Play video with sound" }));
+    await waitFor(() => expect(player.getAttribute("data-audio-unlocked")).toBe("true"));
+
+    let releaseSecond!: () => void;
+    const secondGate = new Promise<void>((resolve) => { releaseSecond = resolve; });
+    const second = createVideo({
+      input: "Second",
+      audio: { src: "data:audio/wav;base64,UklGRg==" },
+    }, {
+      generate: async function* () {
+        await secondGate;
+        yield { type: "scene.add" as const, scene: { id: "second", templateId: "customer", variables: {}, timing: { fixedDuration: 3 } } };
+        yield { type: "plan.complete" as const };
+      },
+    });
+    view.rerender(createElement(VideoPlayer, {
+      templates: kit,
+      stream: second.stream,
+      playbackMode: "autoplay-after-interaction",
+    }));
+
+    expect(player.getAttribute("data-status")).toBe("streaming");
+    expect(player.getAttribute("data-playing")).toBe("true");
+    expect(view.getByTestId("video-generation-cover")).toBeDefined();
+    releaseSecond();
+  });
+
+  it("starts each replacement stream as a fresh autoplay session with an immediate cover", async () => {
+    let nextFrame: FrameRequestCallback | undefined;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      nextFrame = callback;
+      return 1;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => undefined);
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: () => ({
+        matches: false,
+        media: "(prefers-reduced-motion: reduce)",
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }),
+    });
+    const { VideoPlayer } = await import("../src/player/video-player");
+    const kit = createRenderTemplateRegistry({ templates: [] });
+    const first = createVideo({ input: "First" }, {
+      generate: async function* () {
+        yield { type: "scene.add" as const, scene: { id: "first", templateId: "customer", variables: {}, timing: { fixedDuration: 1 } } };
+        yield { type: "plan.complete" as const };
+      },
+    });
+    const view = render(createElement(VideoPlayer, { templates: kit, stream: first.stream, autoPlay: true }));
+    const player = view.getByTestId("video-player");
+    await waitFor(() => expect(player.getAttribute("data-status")).toBe("complete"));
+    act(() => nextFrame?.(performance.now() + 4_000));
+    await waitFor(() => expect(player.getAttribute("data-playing")).toBe("false"));
+
+    let releaseSecond!: () => void;
+    const secondGate = new Promise<void>((resolve) => { releaseSecond = resolve; });
+    const second = createVideo({ input: "Second" }, {
+      generate: async function* () {
+        await secondGate;
+        yield { type: "scene.add" as const, scene: { id: "second", templateId: "customer", variables: {}, timing: { fixedDuration: 1 } } };
+        yield { type: "plan.complete" as const };
+      },
+    });
+    view.rerender(createElement(VideoPlayer, { templates: kit, stream: second.stream, autoPlay: true }));
+
+    expect(player.getAttribute("data-status")).toBe("streaming");
+    expect(player.getAttribute("data-current-time")).toBe("0.000");
+    expect(player.getAttribute("data-playing")).toBe("true");
+    expect(view.getByTestId("video-generation-cover")).toBeDefined();
+    releaseSecond();
   });
 
   it("completes a one-shot stream under React Strict Mode", async () => {
@@ -321,14 +606,16 @@ describe("VideoPlayer", () => {
     }));
     const player = view.getByTestId("video-player");
     await waitFor(() => expect(player.getAttribute("data-status")).toBe("complete"));
-    nextFrame?.(performance.now() + 2_000);
+    nextFrame?.(performance.now() + 4_000);
     await waitFor(() => {
       expect(player.getAttribute("data-playing")).toBe("false");
       expect(player.getAttribute("data-ended")).toBe("true");
-      expect(player.getAttribute("data-current-time")).toBe("1.000");
+      expect(player.getAttribute("data-current-time")).toBe("3.000");
     });
 
-    fireEvent.click(view.getByRole("button", { name: "Replay video response" }));
+    const replay = view.getByRole("button", { name: "Replay video response" });
+    expect(replay.textContent).toContain("Replay");
+    fireEvent.click(replay);
     expect(player.getAttribute("data-playing")).toBe("true");
     expect(player.getAttribute("data-ended")).toBe("false");
     expect(player.getAttribute("data-current-time")).toBe("0.000");
@@ -369,6 +656,7 @@ describe("VideoPlayer", () => {
     expect(player.getAttribute("role")).toBe("region");
     expect(player.getAttribute("aria-label")).toBe("Quarterly recap");
     expect(player.getAttribute("tabindex")).toBe("0");
+    await waitFor(() => expect(player.getAttribute("data-scenes")).toBe("1"));
     expect(player.getAttribute("data-playing")).toBe("false");
     fireEvent.keyDown(player, { key: " " });
     expect(player.getAttribute("data-playing")).toBe("true");
@@ -491,12 +779,12 @@ describe("VideoPlayer", () => {
     const view = render(createElement(VideoPlayer, {
       templates: createRenderTemplateRegistry({ templates: [] }),
       stream: response.stream,
-      autoPlay: true,
-      startMuted: false,
+      playbackMode: "autoplay-with-sound",
     }));
 
     await waitFor(() => expect(view.getByTestId("video-player").getAttribute("data-playing")).toBe("false"));
-    expect(view.getByRole("button", { name: "Play video response" })).toBeDefined();
+    expect(view.getByTestId("video-player").getAttribute("data-current-time")).toBe("0.000");
+    expect(view.getByRole("button", { name: "Play video with sound" })).toBeDefined();
   });
 
   it("exposes soundtrack and fullscreen controls like a video player", async () => {
@@ -559,15 +847,18 @@ describe("VideoPlayer", () => {
     const kit = createRenderTemplateRegistry({
       templates: [
         defineTemplate({
-          id: "notification",
-          useWhen: "A personalized opening is supplied before generation.",
+          id: "media",
+          useWhen: "A concise sentence opens on the brand gradient.",
           schema: {
             type: "object",
-            properties: { message: { type: "string", default: "Your update is ready." } },
-            required: ["message"],
+            properties: {
+              texts: { type: "string", default: "Your update is ready." },
+              mediaType: { type: "string", enum: ["gradient"], default: "gradient" },
+            },
+            required: ["texts"],
             additionalProperties: false,
           },
-          component: ({ variables }) => createElement("div", null, String(variables.message)),
+          component: ({ variables }) => createElement("div", null, String(variables.texts)),
         }),
         defineTemplate({
           id: "customerMetric",
@@ -622,7 +913,7 @@ describe("VideoPlayer", () => {
     expect(player.getAttribute("data-scenes")).toBe("2");
     expect(player.style.width).toBe("360px");
     expect(player.style.height).toBe("640px");
-    expect(player.querySelector('[data-template-id="notification"]')).not.toBeNull();
+    expect(player.querySelector('[data-template-id="media"]')).not.toBeNull();
     expect(player.textContent).toContain("Your activation update is ready.");
     expect(view.queryByText("Video response could not finish")).toBeNull();
   });

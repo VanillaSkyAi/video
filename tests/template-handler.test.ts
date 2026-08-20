@@ -35,6 +35,28 @@ const mediaKit = createServerTemplateRegistry({
   }],
 });
 
+const incompatibleResolverKit = createServerTemplateRegistry({
+  templates: [{
+    id: "incompatibleMedia",
+    jobs: ["claim"],
+    schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        mediaKeyword: { type: "string", format: "stock-media-keyword" },
+        mediaUrl: { type: "string", format: "uri", default: "" },
+        mediaType: { type: "string", enum: ["auto"] },
+      },
+      required: ["title"],
+      additionalProperties: false,
+      "x-vanillasky": { allowsStockMedia: true },
+    },
+    usesGlobalTextEffect: false,
+    usesGlobalTransition: false,
+    usesGlobalBackgroundEffect: false,
+  }],
+});
+
 const quoteKit = createServerTemplateRegistry({
   templates: createRenderTemplateRegistry({ templates: [defineTemplate({
     id: "quote",
@@ -95,6 +117,22 @@ const pacingKit = createServerTemplateRegistry({
       minDuration: 3,
       preferredDuration: 4,
       timing: { contentFields: ["cta"], contentUnit: "words" },
+      usesGlobalTextEffect: false,
+      usesGlobalTransition: false,
+      usesGlobalBackgroundEffect: false,
+    },
+    {
+      id: "payoff",
+      jobs: ["payoff"],
+      schema: {
+        type: "object",
+        properties: { message: { type: "string" } },
+        required: ["message"],
+        additionalProperties: false,
+      },
+      minDuration: 2,
+      preferredDuration: 3,
+      timing: { contentFields: ["message"], contentUnit: "words" },
       usesGlobalTextEffect: false,
       usesGlobalTransition: false,
       usesGlobalBackgroundEffect: false,
@@ -200,7 +238,7 @@ describe("createVideoHandler", () => {
     ]);
     expect(systemPrompt).toContain('"variables":{"message":"string!"}');
     expect(systemPrompt).not.toContain('"contentFields"');
-    expect(systemPrompt).toContain("Reserve at least 3 seconds for a final ask");
+    expect(systemPrompt).toContain("Reserve at least 3 seconds for the final closer");
   });
 
   it("allocates a supplied opening within the same deterministic closer budget", async () => {
@@ -225,7 +263,7 @@ describe("createVideoHandler", () => {
           maxDurationSec: 5,
           brand: { name: "Acme" },
         },
-        capabilities: { templates: ["notification", "close"] },
+        capabilities: { templates: ["media", "close"] },
       }),
     }));
     expect(response.status).toBe(200);
@@ -233,8 +271,8 @@ describe("createVideoHandler", () => {
     for await (const event of decodeVideoSse(response.body!)) events.push(event);
 
     expect(events.filter(({ type }) => type === "scene.add")).toMatchObject([
-      { data: { scene: { id: "supplied-opening", timing: { startTime: 0, endTime: 2, fixedDuration: 2 } } } },
-      { data: { scene: { id: "close-1", timing: { startTime: 2, endTime: 5, fixedDuration: 3 } } } },
+      { data: { scene: { id: "supplied-opening", timing: { startTime: 0, endTime: 1.5, fixedDuration: 1.5 } } } },
+      { data: { scene: { id: "close-1", timing: { startTime: 1.5, endTime: 5, fixedDuration: 3.5 } } } },
     ]);
     expect(events.filter(({ type }) => type === "response.warning")).toHaveLength(2);
   });
@@ -277,6 +315,154 @@ describe("createVideoHandler", () => {
       type: "response.complete",
       data: { finishReason: "length", snapshot: { scenes: [{ id: "body-1" }, { id: "close-1" }] } },
     });
+  });
+
+  it("holds an explicitly placed payoff emitted early and appends it after every body scene", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const handler = createVideoHandler({
+      authorize: "none",
+      templates: pacingKit,
+      heartbeatMs: false,
+      streamText: async function* () {
+        yield '{"type":"scene.add","scene":{"id":"body-1","templateId":"body","variables":{"message":"Primary grounded point"},"timing":{"fixedDuration":4}}}\n';
+        yield '{"type":"scene.add","placement":"closer","scene":{"id":"payoff-1","templateId":"payoff","variables":{"message":"The work now moves faster everywhere"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"scene.add","scene":{"id":"body-2","templateId":"body","variables":{"message":"This detailed secondary grounded point contains enough words that it cannot displace the reserved final payoff"},"timing":{"fixedDuration":5}}}\n';
+        yield '{"type":"plan.complete"}\n';
+      },
+    });
+    const response = await handler(new Request("https://app.example/api/video", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: "0.4",
+        requestId: "request-explicit-payoff-closer",
+        input: { input: "Two grounded points whose payoff is that work now moves faster everywhere.", maxDurationSec: 10 },
+        capabilities: { templates: ["body", "payoff"] },
+      }),
+    }));
+    const events = [];
+    for await (const event of decodeVideoSse(response.body!)) events.push(event);
+
+    expect(events.filter(({ type }) => type === "scene.add").map((event) =>
+      event.type === "scene.add" ? event.data.scene.id : ""
+    )).toEqual(["body-1", "payoff-1"]);
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "response.warning",
+      data: { warning: expect.objectContaining({ code: "scene_omitted_for_closer", sceneId: "body-2" }) },
+    }));
+    expect(events.at(-1)).toMatchObject({
+      type: "response.complete",
+      data: { snapshot: { scenes: [{ id: "body-1" }, { id: "payoff-1", templateId: "payoff" }] } },
+    });
+    expect(events.at(-1)?.data).not.toHaveProperty("placement");
+  });
+
+  it("appends a reserved payoff to the playable snapshot when the provider fails late", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const handler = createVideoHandler({
+      authorize: "none",
+      templates: pacingKit,
+      heartbeatMs: false,
+      streamText: async function* () {
+        yield '{"type":"scene.add","scene":{"id":"body-1","templateId":"body","variables":{"message":"Primary grounded point"},"timing":{"fixedDuration":4}}}\n';
+        yield '{"type":"scene.add","placement":"closer","scene":{"id":"payoff-1","templateId":"payoff","variables":{"message":"The work now moves faster everywhere"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"scene.add","scene":{"id":"body-2","templateId":"body","variables":{"message":"Secondary grounded point"},"timing":{"fixedDuration":4}}}\n';
+        throw new Error("The model provider timed out");
+      },
+    });
+    const response = await handler(new Request("https://app.example/api/video", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: "0.4",
+        requestId: "request-late-provider-failure",
+        input: { input: "Two grounded points whose payoff is that work now moves faster everywhere.", maxDurationSec: 15 },
+        capabilities: { templates: ["body", "payoff"] },
+      }),
+    }));
+    const events = [];
+    for await (const event of decodeVideoSse(response.body!)) events.push(event);
+
+    expect(events.filter(({ type }) => type === "scene.add").map((event) =>
+      event.type === "scene.add" ? event.data.scene.id : ""
+    )).toEqual(["body-1", "body-2", "payoff-1"]);
+    expect(events.at(-1)).toMatchObject({
+      type: "response.error",
+      data: {
+        terminal: true,
+        snapshot: { scenes: [{ id: "body-1" }, { id: "body-2" }, { id: "payoff-1", templateId: "payoff" }] },
+      },
+    });
+  });
+
+  it("marks a standard handler plan partial when it completes without a closer", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const handler = createVideoHandler({
+      authorize: "none",
+      templates: pacingKit,
+      heartbeatMs: false,
+      streamText: async function* () {
+        yield '{"type":"scene.add","scene":{"id":"body-1","templateId":"body","variables":{"message":"Primary grounded point"},"timing":{"fixedDuration":4}}}\n';
+        yield '{"type":"plan.complete"}\n';
+      },
+    });
+    const response = await handler(new Request("https://app.example/api/video", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: "0.4",
+        requestId: "request-missing-closer",
+        input: { input: "One grounded point." },
+        capabilities: { templates: ["body", "payoff"] },
+      }),
+    }));
+    const events = [];
+    for await (const event of decodeVideoSse(response.body!)) events.push(event);
+
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "response.warning",
+      data: { warning: expect.objectContaining({ code: "plan_missing_closer", category: "provider" }) },
+    }));
+    expect(events.at(-1)).toMatchObject({
+      type: "response.complete",
+      data: { finishReason: "other" },
+    });
+  });
+
+  it("rejects a body-only template explicitly placed as the closer", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const handler = createVideoHandler({
+      authorize: "none",
+      templates: pacingKit,
+      heartbeatMs: false,
+      streamText: async function* () {
+        yield '{"type":"scene.add","scene":{"id":"body-1","templateId":"body","variables":{"message":"Primary grounded point"},"timing":{"fixedDuration":4}}}\n';
+        yield '{"type":"scene.add","placement":"closer","scene":{"id":"bad-ending","templateId":"body","variables":{"message":"Another body point"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"plan.complete"}\n';
+      },
+    });
+    const response = await handler(new Request("https://app.example/api/video", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: "0.4",
+        requestId: "request-body-as-closer",
+        input: { input: "Two grounded body points." },
+        capabilities: { templates: ["body", "payoff"] },
+      }),
+    }));
+    const events = [];
+    for await (const event of decodeVideoSse(response.body!)) events.push(event);
+
+    expect(events.filter(({ type }) => type === "scene.add").map((event) =>
+      event.type === "scene.add" ? event.data.scene.id : ""
+    )).toEqual(["body-1"]);
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "response.error",
+      data: expect.objectContaining({
+        error: expect.objectContaining({ code: "invalid_generated_part", recoverable: true }),
+      }),
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "response.warning",
+      data: { warning: expect.objectContaining({ code: "plan_missing_closer" }) },
+    }));
   });
 
   it("uses the trusted built-in metadata and validation when no registry is configured", async () => {
@@ -400,12 +586,12 @@ describe("createVideoHandler", () => {
     expect(body).toContain('"type":"response.complete"');
   });
 
-  it("rejects an automatic opening when a notification override breaks its reserved input contract", async () => {
+  it("rejects an automatic opening when a media override breaks its reserved input contract", async () => {
     const { createVideoHandler } = await import("../src/server");
     const streamText = vi.fn(async function* () { yield '{"type":"plan.complete"}\n'; });
     const templates = createServerTemplateRegistry({
       templates: [{
-        id: "notification",
+        id: "media",
         schema: {
           type: "object",
           properties: { title: { type: "string" } },
@@ -478,6 +664,314 @@ describe("createVideoHandler", () => {
       // @ts-expect-error Removed 0.1 beta option must fail closed for stale JavaScript consumers too.
       mediaPolicy: "host-resolved",
     })).toThrow(/suppliedMedia/);
+  });
+
+  it("resolves bounded media intent on later scenes without leaking the query", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const resolveMedia = vi.fn(async () => ({
+      url: "https://media.example.test/team.mp4",
+      type: "video" as const,
+      posterUrl: "https://media.example.test/team.jpg",
+    }));
+    let systemPrompt = "";
+    const handler = createVideoHandler({
+      authorize: "none",
+      heartbeatMs: false,
+      resolveMedia,
+      streamText: async function* (context) {
+        systemPrompt = context.systemPrompt;
+        yield '{"type":"scene.add","scene":{"id":"first","templateId":"bigNumber","variables":{"texts":"Activation","value":58,"label":"percent","mediaKeyword":"product team"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"scene.add","scene":{"id":"payoff","templateId":"media","variables":{"texts":"Momentum unlocked","mediaKeyword":"product team celebrating","mediaType":"video"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"plan.complete"}\n';
+      },
+    });
+    const response = await handler(new Request("https://app.example/api/video", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: "0.4",
+        requestId: "request-resolved-media",
+        input: { input: "Activation reached 58 percent. The product team unlocked momentum." },
+        capabilities: { templates: ["bigNumber", "media"] },
+      }),
+    }));
+    const events = [];
+    for await (const event of decodeVideoSse(response.body!)) events.push(event);
+    const scenes = events.flatMap((event) => event.type === "scene.add" ? [event.data.scene] : []);
+
+    expect(resolveMedia).toHaveBeenCalledTimes(1);
+    expect(resolveMedia).toHaveBeenCalledWith("product team celebrating", expect.objectContaining({
+      templateId: "media",
+      preferredType: "video",
+      signal: expect.any(AbortSignal),
+    }));
+    expect(systemPrompt).toContain('"mediaKeyword":"string{2..80}"');
+    expect(scenes[0].variables).toMatchObject({ mediaType: "gradient" });
+    expect(scenes[0].variables).not.toHaveProperty("mediaKeyword");
+    expect(scenes[0].variables).not.toHaveProperty("mediaUrl");
+    expect(scenes[1].variables).toMatchObject({
+      mediaUrl: "https://media.example.test/team.mp4",
+      mediaType: "video",
+      mediaPoster: "https://media.example.test/team.jpg",
+    });
+    expect(JSON.stringify(events)).not.toContain("mediaKeyword");
+    expect(events.at(-1)).toMatchObject({ type: "response.complete" });
+  });
+
+  it("falls back to a gradient when the configured resolver finds no safe asset", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const handler = createVideoHandler({
+      authorize: "none",
+      heartbeatMs: false,
+      resolveMedia: async () => null,
+      streamText: async function* () {
+        yield '{"type":"scene.add","scene":{"id":"first","templateId":"bigNumber","variables":{"texts":"Activation","value":58,"label":"percent"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"scene.add","scene":{"id":"second","templateId":"bigNumber","variables":{"texts":"Retention","value":71,"label":"percent","mediaKeyword":"abstract unsafe concept"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"plan.complete"}\n';
+      },
+    });
+    const response = await handler(new Request("https://app.example/api/video", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: "0.4",
+        requestId: "request-media-fallback",
+        input: { input: "Activation reached 58 percent and retention reached 71 percent." },
+        capabilities: { templates: ["bigNumber"] },
+      }),
+    }));
+    const events = [];
+    for await (const event of decodeVideoSse(response.body!)) events.push(event);
+    const second = events.flatMap((event) => event.type === "scene.add" ? [event.data.scene] : [])[1];
+
+    expect(second.variables).toMatchObject({ mediaType: "gradient" });
+    expect(second.variables).not.toHaveProperty("mediaKeyword");
+    expect(second.variables).not.toHaveProperty("mediaUrl");
+    expect(events.at(-1)).toMatchObject({ type: "response.complete" });
+  });
+
+  it("keeps the first accepted generated scene asset-free after an earlier candidate is rejected", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const handler = createVideoHandler({
+      authorize: "none",
+      heartbeatMs: false,
+      resolveMedia: async () => ({
+        url: "https://media.example.test/premature.mp4",
+        type: "video",
+      }),
+      streamText: async function* () {
+        yield '{"type":"scene.add","scene":{"id":"invalid-first","templateId":"bigNumber","variables":{"texts":"Activation","value":58},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"scene.add","scene":{"id":"premature-media","templateId":"media","variables":{"texts":"Momentum unlocked","mediaKeyword":"product team celebrating"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"scene.add","scene":{"id":"first-accepted","templateId":"bigNumber","variables":{"texts":"Retention","value":71,"label":"percent"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"plan.complete"}\n';
+      },
+    });
+    const response = await handler(new Request("https://app.example/api/video", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: "0.4",
+        requestId: "request-first-accepted-asset-free",
+        input: { input: "Activation reached 58 percent and retention reached 71 percent." },
+        capabilities: { templates: ["bigNumber", "media"] },
+      }),
+    }));
+    const events = [];
+    for await (const event of decodeVideoSse(response.body!)) events.push(event);
+    const scenes = events.flatMap((event) => event.type === "scene.add" ? [event.data.scene] : []);
+
+    expect(scenes.map(({ id }) => id)).toEqual(["premature-media", "first-accepted"]);
+    expect(scenes[0].variables).toMatchObject({ mediaType: "gradient" });
+    expect(scenes[0].variables).not.toHaveProperty("mediaUrl");
+    expect(scenes[0].variables).not.toHaveProperty("mediaKeyword");
+    expect(JSON.stringify(events)).not.toContain("premature.mp4");
+    expect(events.at(-1)).toMatchObject({ type: "response.complete" });
+  });
+
+  it("resolves media intent in scene.patch without exposing mediaKeyword", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const resolveMedia = vi.fn(async () => ({
+      url: "https://media.example.test/patched.jpg",
+      type: "image" as const,
+    }));
+    const handler = createVideoHandler({
+      authorize: "none",
+      heartbeatMs: false,
+      resolveMedia,
+      streamText: async function* () {
+        yield '{"type":"scene.add","scene":{"id":"opening","templateId":"bigNumber","variables":{"texts":"Activation","value":58,"label":"percent"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"scene.add","scene":{"id":"later","templateId":"bigNumber","variables":{"texts":"Retention","value":71,"label":"percent","mediaType":"gradient"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"scene.patch","sceneId":"later","patch":{"variables":{"mediaKeyword":"customer success meeting","mediaType":"photo"}}}\n';
+        yield '{"type":"plan.complete"}\n';
+      },
+    });
+    const response = await handler(new Request("https://app.example/api/video", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: "0.4",
+        requestId: "request-media-scene-patch",
+        input: { input: "Activation reached 58 percent and retention reached 71 percent." },
+        capabilities: { templates: ["bigNumber"] },
+      }),
+    }));
+    const events = [];
+    for await (const event of decodeVideoSse(response.body!)) events.push(event);
+    const patchEvent = events.find(({ type }) => type === "scene.patch");
+
+    expect(resolveMedia).toHaveBeenCalledWith("customer success meeting", expect.objectContaining({
+      templateId: "bigNumber",
+      preferredType: "image",
+    }));
+    expect(patchEvent).toMatchObject({
+      type: "scene.patch",
+      data: { patch: { variables: {
+        mediaUrl: "https://media.example.test/patched.jpg",
+        mediaType: "photo",
+      } } },
+    });
+    expect(JSON.stringify(events)).not.toContain("mediaKeyword");
+  });
+
+  it("resolves media intent in asset.patch without exposing mediaKeyword", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const resolveMedia = vi.fn(async () => ({
+      url: "https://media.example.test/patched.mp4",
+      type: "video" as const,
+      posterUrl: "https://media.example.test/patched-poster.jpg",
+    }));
+    const handler = createVideoHandler({
+      authorize: "none",
+      heartbeatMs: false,
+      resolveMedia,
+      streamText: async function* () {
+        yield '{"type":"scene.add","scene":{"id":"opening","templateId":"bigNumber","variables":{"texts":"Activation","value":58,"label":"percent"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"scene.add","scene":{"id":"later","templateId":"bigNumber","variables":{"texts":"Retention","value":71,"label":"percent","mediaType":"gradient"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"asset.patch","sceneId":"later","variables":{"mediaKeyword":"customer success celebration","mediaType":"video"}}\n';
+        yield '{"type":"plan.complete"}\n';
+      },
+    });
+    const response = await handler(new Request("https://app.example/api/video", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: "0.4",
+        requestId: "request-media-asset-patch",
+        input: { input: "Activation reached 58 percent and retention reached 71 percent." },
+        capabilities: { templates: ["bigNumber"] },
+      }),
+    }));
+    const events = [];
+    for await (const event of decodeVideoSse(response.body!)) events.push(event);
+    const patchEvent = events.find(({ type }) => type === "asset.patch");
+
+    expect(resolveMedia).toHaveBeenCalledWith("customer success celebration", expect.objectContaining({
+      templateId: "bigNumber",
+      preferredType: "video",
+    }));
+    expect(patchEvent).toMatchObject({
+      type: "asset.patch",
+      data: { variables: {
+        mediaUrl: "https://media.example.test/patched.mp4",
+        mediaType: "video",
+        mediaPoster: "https://media.example.test/patched-poster.jpg",
+      } },
+    });
+    expect(JSON.stringify(events)).not.toContain("mediaKeyword");
+  });
+
+  it("falls back to a gradient when the application media resolver fails", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const handler = createVideoHandler({
+      authorize: "none",
+      heartbeatMs: false,
+      resolveMedia: async () => { throw new Error("private provider failure"); },
+      streamText: async function* () {
+        yield '{"type":"scene.add","scene":{"id":"opening","templateId":"bigNumber","variables":{"texts":"Activation","value":58,"label":"percent"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"scene.add","scene":{"id":"later","templateId":"bigNumber","variables":{"texts":"Retention","value":71,"label":"percent","mediaKeyword":"customer success meeting"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"plan.complete"}\n';
+      },
+    });
+    const response = await handler(new Request("https://app.example/api/video", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: "0.4",
+        requestId: "request-media-resolver-failure",
+        input: { input: "Activation reached 58 percent and retention reached 71 percent." },
+        capabilities: { templates: ["bigNumber"] },
+      }),
+    }));
+    const events = [];
+    for await (const event of decodeVideoSse(response.body!)) events.push(event);
+    const scenes = events.flatMap((event) => event.type === "scene.add" ? [event.data.scene] : []);
+
+    expect(scenes[1].variables).toMatchObject({ mediaType: "gradient" });
+    expect(scenes[1].variables).not.toHaveProperty("mediaKeyword");
+    expect(events.at(-1)).toMatchObject({ type: "response.complete" });
+    expect(JSON.stringify(events)).not.toContain("private provider failure");
+  });
+
+  it("does not swallow an AbortError from the application media resolver", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const onError = vi.fn();
+    const handler = createVideoHandler({
+      authorize: "none",
+      heartbeatMs: false,
+      onError,
+      resolveMedia: async () => { throw new DOMException("cancelled", "AbortError"); },
+      streamText: async function* () {
+        yield '{"type":"scene.add","scene":{"id":"opening","templateId":"bigNumber","variables":{"texts":"Activation","value":58,"label":"percent"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"scene.add","scene":{"id":"later","templateId":"bigNumber","variables":{"texts":"Retention","value":71,"label":"percent","mediaKeyword":"customer success meeting"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"plan.complete"}\n';
+      },
+    });
+    const response = await handler(new Request("https://app.example/api/video", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: "0.4",
+        requestId: "request-media-resolver-abort",
+        input: { input: "Activation reached 58 percent and retention reached 71 percent." },
+        capabilities: { templates: ["bigNumber"] },
+      }),
+    }));
+    const events = [];
+    for await (const event of decodeVideoSse(response.body!)) events.push(event);
+
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ name: "AbortError" }));
+    expect(events.at(-1)).toMatchObject({ type: "response.error", data: { terminal: true } });
+    expect(events.some(({ type }) => type === "response.complete")).toBe(false);
+  });
+
+  it("does not expose or resolve media intent for an incompatible custom media schema", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const resolveMedia = vi.fn(async () => ({
+      url: "https://media.example.test/should-not-resolve.jpg",
+      type: "image" as const,
+    }));
+    let systemPrompt = "";
+    const handler = createVideoHandler({
+      authorize: "none",
+      templates: incompatibleResolverKit,
+      heartbeatMs: false,
+      resolveMedia,
+      streamText: async function* (context) {
+        systemPrompt = context.systemPrompt;
+        yield '{"type":"scene.add","scene":{"id":"custom","templateId":"incompatibleMedia","variables":{"title":"Grounded","mediaKeyword":"product team"},"timing":{"fixedDuration":3}}}\n';
+        yield '{"type":"plan.complete"}\n';
+      },
+    });
+    const response = await handler(new Request("https://app.example/api/video", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: "0.4",
+        requestId: "request-incompatible-media-schema",
+        input: { input: "Grounded." },
+        capabilities: { templates: ["incompatibleMedia"] },
+      }),
+    }));
+    const events = [];
+    for await (const event of decodeVideoSse(response.body!)) events.push(event);
+    const scene = events.find(({ type }) => type === "scene.add");
+
+    expect(systemPrompt).not.toContain('"mediaKeyword"');
+    expect(resolveMedia).not.toHaveBeenCalled();
+    expect(scene).toMatchObject({ type: "scene.add", data: { scene: { variables: { title: "Grounded" } } } });
+    expect(JSON.stringify(events)).not.toContain("mediaKeyword");
   });
 
   it("uses safe prompt and validator overrides without exposing provider ownership", async () => {

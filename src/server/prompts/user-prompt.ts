@@ -74,11 +74,15 @@ export function buildVideoUserPrompt(input: VideoInput, openingDurationSec = 0):
     "For a long source, summarize instead of attempting to represent every fact, unless the creative instructions explicitly request complete fact coverage that fits the duration.",
     "Preserve exact wording and numbers for the takeaways you select. Preserve qualifiers, units, denominators, ranges, and comparison direction; for example, do not shorten 4.8 out of 5 to 4.8.",
     "Choose the scene count from the distinct grounded material and the duration budget. Use fewer scenes for sparse input; continue beyond five when rich input warrants it and timing allows.",
+    "If the creative instructions explicitly require one separate scene per named item, release, section, or list entry, do not merge, group, or omit those required items. Keep related required scenes adjacent in a coherent progression while preserving each item as its own scene.",
+    "Before emitting, verify that the explicitly requested structure can fit readably within the maximum duration. If it cannot, preserve readability and the requested separation for the scenes that fit, then finish with plan.complete using finishReason length rather than silently changing the structure.",
+    "For ordinary multi-fact input, form at least three distinct beats: hook, comprehension, and payoff. Use only one or two beats when the source genuinely contains no more than two independent grounded takeaways. This is a narrative guideline, never permission to repeat facts or add filler.",
+    "After the first playable body scene, emit exactly one scene.add with placement closer. Generate a short grounded conclusion that answers the story's so-what; it must not repeat hook language or imply another scene follows.",
     "Use a different suitable template for each body scene when the catalog supports it.",
     "Never add filler to satisfy a count or diversity target.",
     input.suppliedMedia?.length
-      ? "Select zero or more relevant opaque supplied-media references for visible later scenes. Never invent or transform a reference, and never emit mediaKeyword without a resolved mediaUrl."
-      : "Use asset-free templates. No media URL has been supplied or resolved. Never emit mediaKeyword without a resolved mediaUrl.",
+      ? "Select zero or more relevant opaque supplied-media references for visible later scenes. Never invent or transform a reference. Only emit mediaKeyword when the trusted system catalog explicitly exposes it, and only on later scenes. Never invent mediaUrl or mediaPoster."
+      : "No supplied media URL is available. Use asset-free templates unless the trusted system catalog explicitly permits host-resolved media intent. Only emit mediaKeyword when the trusted system catalog explicitly exposes it, and only on later scenes. Never invent mediaUrl or mediaPoster.",
     "",
     "RAW INPUT",
     input.input.trim(),

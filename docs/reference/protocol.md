@@ -78,6 +78,15 @@ validated `scene.add`, `scene.patch`, `asset.patch`, `plan.complete`, or
 snapshots, and checksums. Generated HTML, React, JavaScript, CSS, component
 source, audio events, protocol envelopes, and unknown part types are rejected.
 
+A planner may add `placement: "closer"` to exactly one `scene.add`. The
+standard handler requires that closer by default, holds it outside the public
+event stream while body scenes continue, and commits it as the final scene.
+Only templates advertised for `jobs:[ask]` or `jobs:[payoff]` qualify. The
+placement marker is not part of `VideoScene` and never enters a replay
+snapshot. If the planner completes without a valid closer, the handler emits
+`plan_missing_closer` and uses `finishReason: "other"`; provider `length` and
+`content-filter` reasons remain unchanged.
+
 ## Resume
 
 A resume request repeats the public input and includes:

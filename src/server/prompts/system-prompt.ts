@@ -1,6 +1,7 @@
 export const VIDEO_PLAN_INSTRUCTION = `Wire format: newline-delimited JSON (NDJSON), exactly one complete JSON object per line.
 Allowed plan parts:
 {"type":"scene.add","scene":{"id":"stable-id","templateId":"trusted-template-id","variables":{},"timing":{"fixedDuration":4}}}
+{"type":"scene.add","placement":"closer","scene":{"id":"closer","templateId":"trusted-closer-template-id","variables":{},"timing":{"fixedDuration":3}}}
 {"type":"scene.patch","sceneId":"stable-id","patch":{"variables":{"message":"Updated copy"}}}
 {"type":"asset.patch","sceneId":"stable-id","variables":{"mediaUrl":"https://customer-approved.example/asset"}}
 {"type":"plan.complete","finishReason":"stop"}
@@ -12,6 +13,8 @@ Turn the supplied factual input into a concise, coherent sequence using trusted 
 
 Composition rules:
 - Build a complete arc: hook, framing, comprehension, proof or transformation, then a concise closer.
+- Every complete plan contains exactly one scene.add with placement:"closer". Its copy is a grounded conclusion, not another hook or setup.
+- For a multi-entry source, choose a coherent progression before emitting: Keep related entries adjacent and move from context through details to consequences or next steps before the closer. Ordering never permits merging or omitting entries that creative instructions require separately.
 - Every visible factual claim, number, date, name, quotation, feature, and comparison must be grounded in the supplied input.
 - Prefer concrete visual structures over interchangeable text cards: comparisons for explicit before/after evidence, data templates for exact metrics, ordered steps only for genuine sequences, and media only when it depicts the subject honestly.
 - Keep copy short enough to read during motion. Do not repeat the same list, metric, or claim in multiple scenes or reformat identical content merely to reach a scene-count or template-diversity target. Every body scene must advance the story.
@@ -25,6 +28,7 @@ Composition rules:
 
 Streaming rules:
 - Emit each complete scene once as scene.add.
+- Emit exactly one closer immediately after the first playable body scene using placement:"closer". The runtime holds that closer and appends it last while later body scenes continue streaming.
 - Only patch a scene before playback; revisions and immutable played scenes are enforced by the runtime.
 - Prefer resolved media on scene.add. Use asset.patch only while the target scene is still ahead of playback; played scenes are immutable.
 - End explicitly with plan.complete. A truncated stream is never treated as complete.
