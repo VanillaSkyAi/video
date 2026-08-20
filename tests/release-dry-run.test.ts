@@ -36,18 +36,29 @@ describe("local release dry run", () => {
       .toBeLessThan(dryRun.indexOf("const temporaryRoot = mkdtempSync"));
   });
 
-  it("retires tag-mode publishing until the main-only release workflow replaces it", () => {
+  it("allows tag-mode publishing only from the exact approved main commit", () => {
     const dryRun = readFileSync(resolve(root, "scripts", "release-dry-run.mjs"), "utf8");
     const workflow = readFileSync(resolve(root, ".github", "workflows", "release.yml"), "utf8");
-    const retirementGuard = dryRun.indexOf("Tag-triggered publishing is temporarily disabled");
     const verifyJob = workflow.slice(workflow.indexOf("  verify:"), workflow.indexOf("  publish-npm:"));
     const publishJob = workflow.slice(workflow.indexOf("  publish-npm:"), workflow.indexOf("  verify-published:"));
 
-    expect(retirementGuard).toBeGreaterThan(-1);
-    expect(retirementGuard).toBeLessThan(dryRun.indexOf("const temporaryRoot = mkdtempSync"));
+    expect(dryRun).not.toContain("Tag-triggered publishing is temporarily disabled");
+    expect(dryRun).toContain('const approvedCommit = execFileSync("git", ["rev-parse", approvedBranch]');
+    expect(dryRun).toContain('assertEqual(sourceCommit, approvedCommit, "release commit on approved branch")');
+    expect(dryRun).not.toContain('"merge-base", "--is-ancestor", sourceCommit, approvedBranch');
     expect(verifyJob).toContain("VANILLASKY_RELEASE_MODE: tag");
     expect(verifyJob).toContain("npm run release:dry-run -- --ci");
     expect(publishJob).toMatch(/publish-npm:\n\s+needs: verify/);
+  });
+
+  it("requires explicit founder approval before any customer-breaking release", () => {
+    const agents = readFileSync(resolve(root, "AGENTS.md"), "utf8");
+    const contributing = readFileSync(resolve(root, "CONTRIBUTING.md"), "utf8");
+
+    for (const policy of [agents, contributing]) {
+      expect(policy).toMatch(/breaking change[\s\S]*explicit approval from\s+Joris/i);
+      expect(policy).toMatch(/migration evidence[\s\S]*does not count as\s+approval/i);
+    }
   });
 
   it("creates the npm execution guard inside temporary-workspace cleanup protection", () => {

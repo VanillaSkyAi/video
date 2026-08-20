@@ -41,7 +41,9 @@ jobs:
       # checkout fetches the peeled event SHA back into refs/tags/<name>,
       # replacing the annotated tag object that the first full fetch obtained.
       - name: Restore annotated release tag object
-        run: git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git fetch --force origin main:refs/remotes/origin/main
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -114,7 +116,7 @@ jobs:
         if: steps.registry.outputs.already-published != 'true'
         run: |
           if [[ "${{ needs.verify.outputs.prerelease }}" == "true" ]]; then
-            release_tag=next
+            release_tag=beta
           else
             release_tag=latest
           fi
@@ -126,13 +128,13 @@ jobs:
 
       - name: Publish prerelease package with trusted provenance
         if: steps.registry.outputs.already-published != 'true' && needs.verify.outputs.prerelease == 'true'
-        run: npm publish "./release-assets/${{ needs.verify.outputs.artifact-filename }}" --provenance --access public --tag next
+        run: npm publish "./release-assets/${{ needs.verify.outputs.artifact-filename }}" --provenance --access public --tag beta
 
       - name: Verify npm artifact identity
         run: |
           node scripts/verify-release-integrity.mjs registry "${{ needs.verify.outputs.name }}@${{ needs.verify.outputs.version }}" "${{ needs.verify.outputs.integrity }}"
           if [[ "${{ needs.verify.outputs.prerelease }}" == "true" ]]; then
-            release_tag=next
+            release_tag=beta
           else
             release_tag=latest
           fi
