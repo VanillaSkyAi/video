@@ -45,6 +45,41 @@ same handler without adding a VanillaSky abstraction. See
 [provider adapter reference](reference/provider-adapters.md) for model alternatives and advanced native
 provider loops.
 
+## Planning effort and reasoning modes
+
+Planning is a structured emit against a trusted catalog, not a reasoning task.
+Where a provider exposes a reasoning or effort control, a host that wants a
+video to start quickly should turn extended reasoning off and keep effort low
+to moderate. The default matters: several current models reason by default, and
+that reasoning happens before the first plan part is emitted, so it is added
+directly to time to first generated scene.
+
+With the Vercel AI SDK and a current Anthropic model, that is one option object:
+
+```ts
+streamText: ({ systemPrompt, userPrompt, signal }) => streamText({
+  model,
+  system: systemPrompt,
+  prompt: userPrompt,
+  abortSignal: signal,
+  providerOptions: {
+    anthropic: { thinking: { type: "disabled" }, effort: "medium" },
+  },
+}),
+```
+
+Measured on one grounded chat answer with the 28 built-in templates, leaving
+the Anthropic default in place cost roughly twenty seconds before the first
+scene; disabling reasoning brought the same plan to a few seconds. Other
+providers expose equivalent controls under their own names. Treat the exact
+values as host-owned tuning: the lowest effort setting is the fastest, but a
+weaker plan misses schema limits more often, which shows up as rejected scenes
+in `onComplete`. Compare `timeToFirstSceneMs` and `rejectedSceneCount` across
+settings before fixing one.
+
+VanillaSky never sets these controls. Provider selection, sampling parameters,
+and credentials stay with the application.
+
 ## Completion and usage
 
 Use `onComplete` for server-side cost and completion measurement:
