@@ -98,6 +98,22 @@ describe("changeset governance", () => {
     );
   });
 
+  it.each([
+    ["force-added published dist output", "dist/index.js", "export const built = true;\n"],
+    ["root TypeScript build configuration", "tsconfig.json", "{\"compilerOptions\":{\"strict\":false}}\n"],
+    ["published npm shrinkwrap", "npm-shrinkwrap.json", "{\"name\":\"@vanillaskyai/video\",\"version\":\"0.1.0\"}\n"],
+    ["npm package inclusion rules", ".npmignore", "private-development-file\n"],
+  ])("treats %s as package-affecting", (_name, path, contents) => {
+    const { baseRef, root } = createRepository();
+    write(root, path, contents);
+    write(root, ".changeset/quiet-tools.md", emptyChangeset);
+    commit(root, `change ${path} without a bump`);
+
+    expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(
+      /@vanillaskyai\/video.*patch.*minor.*major/i,
+    );
+  });
+
   it("treats package lifecycle scripts as package-affecting metadata", () => {
     const { baseRef, root } = createRepository();
     const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
@@ -105,6 +121,27 @@ describe("changeset governance", () => {
     write(root, "package.json", `${JSON.stringify(manifest, null, 2)}\n`);
     write(root, ".changeset/quiet-tools.md", emptyChangeset);
     commit(root, "add an install lifecycle script without a bump");
+
+    expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(
+      /@vanillaskyai\/video.*patch.*minor.*major/i,
+    );
+  });
+
+  it.each([
+    "dependencies",
+    "preprepare",
+    "postprepare",
+    "publish",
+    "postpublish",
+    "preversion",
+    "build",
+  ])("fails closed for non-allowlisted package script %s", (scriptName) => {
+    const { baseRef, root } = createRepository();
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    manifest.scripts[scriptName] = "node package-hook.mjs";
+    write(root, "package.json", `${JSON.stringify(manifest, null, 2)}\n`);
+    write(root, ".changeset/quiet-tools.md", emptyChangeset);
+    commit(root, `add ${scriptName} package script without a bump`);
 
     expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(
       /@vanillaskyai\/video.*patch.*minor.*major/i,

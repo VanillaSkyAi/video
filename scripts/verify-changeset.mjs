@@ -8,27 +8,58 @@ import { parseChangesetFile } from "@changesets/parse";
 
 const PACKAGE_NAME = "@vanillaskyai/video";
 const RELEASE_TYPES = ["patch", "minor", "major"];
-const PACKAGE_LIFECYCLE_SCRIPTS = new Set([
-  "install",
-  "postinstall",
-  "postpack",
-  "preinstall",
-  "prepack",
-  "prepare",
-  "prepublish",
-  "prepublishOnly",
+const REPOSITORY_ONLY_SCRIPTS = new Set([
+  "acceptance:live",
+  "acceptance:review",
+  "acceptance:replay",
+  "browser:install",
+  "browser:test",
+  "catalog:check",
+  "catalog:sync",
+  "changeset",
+  "changeset:check",
+  "changeset:status",
+  "example:build",
+  "example:dev",
+  "example:install",
+  "example:preview",
+  "examples:install-current",
+  "examples:verify-documented",
+  "lint",
+  "registry:check",
+  "registry:sync",
+  "release:check",
+  "release:dry-run",
+  "release:preflight",
+  "release:prepare",
+  "server-examples:compat",
+  "server-examples:typecheck",
+  "template:check",
+  "test",
+  "test:watch",
+  "typecheck",
+  "verify:api",
+  "verify:nextjs",
+  "verify:onboarding",
+  "verify:package",
+  "verify:package-size",
+  "verify:published",
 ]);
 const PACKAGE_FILES = new Set([
+  ".npmignore",
   "CHANGELOG.md",
   "LICENSE",
   "PUBLIC-API.md",
   "README.md",
   "SECURITY.md",
   "SUPPORT.md",
+  "npm-shrinkwrap.json",
+  "tsconfig.json",
   "tsup.config.ts",
 ]);
 const PACKAGE_PREFIXES = [
   "bin/",
+  "dist/",
   "examples/custom-template/",
   "examples/nextjs-quickstart/",
   "registry/",
@@ -44,7 +75,7 @@ function packageManifestSurface(manifest) {
   delete surface.devDependencies;
   delete surface.packageManager;
   surface.scripts = Object.fromEntries(
-    Object.entries(surface.scripts ?? {}).filter(([name]) => PACKAGE_LIFECYCLE_SCRIPTS.has(name)),
+    Object.entries(surface.scripts ?? {}).filter(([name]) => !REPOSITORY_ONLY_SCRIPTS.has(name)),
   );
   return surface;
 }
