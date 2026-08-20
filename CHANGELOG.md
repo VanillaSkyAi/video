@@ -4,6 +4,9 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
+- Documents closer eligibility: a template may close a video only when its
+  `jobs` include `"ask"` or `"payoff"`, with the catalog filter an application
+  can use to constrain how its videos end.
 - Documents provider reasoning and effort controls for planning: models that
   reason by default add that time directly to the first generated scene, so
   hosts that want a video to start quickly should disable extended reasoning

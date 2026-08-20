@@ -83,12 +83,39 @@ The file created by `vanillasky create` is a complete working template. Keep
 these concerns together:
 
 - `useWhen` and `avoidWhen` tell the AI when the visual is appropriate;
+- `jobs` declares the narrative roles the template can fill, and decides
+  whether it may close a video;
 - `schema` defines allowed variables, validation, defaults, labels, and
   grounding formats;
 - named `examples` provide complete deterministic preview values;
 - `component` receives only validated variables and render context;
 - raw `progress`, dimensions, and `safeZone` make semantic state deterministic
   and layout safe in portrait and landscape.
+
+### Which templates may close a video
+
+Every complete plan ends on exactly one closer, and the runtime only accepts a
+closer whose `jobs` include `"ask"` or `"payoff"`. Marking any other template as
+the closer rejects that scene with `Scene template <id> cannot be used as a
+closer`, and the reserved closing time is given to a template that qualifies.
+
+Declare `jobs: ["ask"]` on a call to action and `jobs: ["payoff"]` on a
+celebration or resolution beat. A template that only presents evidence keeps
+`jobs: ["proof"]` and is never asked to close.
+
+The same rule reads the built-in catalog, so an application that wants to
+constrain how its videos end can compute the eligible IDs instead of guessing:
+
+```ts
+import { builtinTemplates } from "@vanillaskyai/video/templates/catalog";
+
+const closerTemplateIds = builtinTemplates
+  .filter((template) => template.jobs.some((job) => job === "ask" || job === "payoff"))
+  .map((template) => template.id);
+```
+
+Pacing uses the same signal: the planner reserves time for the closer whenever
+the selected catalog contains a template with one of those two jobs.
 
 Customer templates hard-cut by default. Opt into renderer-owned fades only
 for scenes that use the standard media-background variables, and only after
