@@ -24,13 +24,13 @@ export function parseSemver(version: string): {
 export function compareSemver(leftVersion: string, rightVersion: string): number;
 export function isPrereleaseSemver(version: string): boolean;
 export function assertDistTagsCoherent(
-  distTags: { latest?: string; next?: string },
-  candidate?: { candidateVersion?: string; candidateTag?: "latest" | "next" },
-): { latest: string; next?: string };
+  distTags: { latest?: string; beta?: string },
+  candidate?: { candidateVersion?: string; candidateTag?: "latest" | "beta" },
+): { latest: string; beta?: string };
 export function assertDistTagTransitionCoherent(
-  distTags: { latest?: string; next?: string },
-  candidate: { candidateVersion: string; candidateTag: "latest" | "next" },
-): { latest: string; next?: string };
+  distTags: { latest?: string; beta?: string },
+  candidate: { candidateVersion: string; candidateTag: "latest" | "beta" },
+): { latest: string; beta?: string };
 export function canonicalizeCompatibilityLockGraph(lock: unknown, sdkPackageName?: string): unknown;
 export function calculateJsonSha256(value: unknown): string;
 export function waitForRegistryIntegrity(options: {

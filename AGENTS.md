@@ -100,8 +100,13 @@ evidence remain immutable on every ordinary branch.
 
 The Version Packages workflow prepares beta candidate files but does not
 publish, tag, or create its pull request. A normal authenticated maintainer or
-agent opens that PR. The existing tag-triggered publisher remains blocked until
-the separately reviewed main-only publishing lifecycle replaces it.
+agent opens that PR. After that reviewed PR merges, the annotated tag publisher
+accepts only the exact current `origin/main` commit and publishes through OIDC.
+
+A breaking change, including a pre-1.0 minor, requires explicit approval from
+Joris before implementation or merge. Breaking-change notes and migration
+evidence are required context, but migration evidence does not count as
+approval.
 
 Never publish, tag, create a release, move dist-tags, modify production secrets,
 or deploy as an implicit side effect of a local verification task.

@@ -38,9 +38,6 @@ assertReleaseToolchain({
   npmVersion: execFileSync("npm", ["--version"], { encoding: "utf8" }).trim(),
 });
 assertNoPendingChangesets({ root });
-if (ciMode && process.env.VANILLASKY_RELEASE_MODE === "tag") {
-  throw new Error("Tag-triggered publishing is temporarily disabled until the main-only release workflow replaces it");
-}
 const temporaryRoot = mkdtempSync(join(tmpdir(), "vanillasky-release-dry-run-"));
 const requestedOutput = process.env.VANILLASKY_RELEASE_OUTPUT_DIR;
 const outputDirectory = requestedOutput ? resolve(requestedOutput) : join(temporaryRoot, "release-assets");
@@ -156,8 +153,8 @@ function verifySourceCoherence() {
     const tagCommit = execFileSync("git", ["rev-parse", `refs/tags/${releaseTag}^{commit}`], { cwd: root, encoding: "utf8" }).trim();
     assertEqual(tagCommit, sourceCommit, "annotated tag commit");
     approvedBranch = process.env.VANILLASKY_APPROVED_BRANCH ?? "origin/main";
-    const ancestry = spawnSync("git", ["merge-base", "--is-ancestor", sourceCommit, approvedBranch], { cwd: root });
-    if (ancestry.status !== 0) throw new Error(`Release commit is not reachable from approved branch ${approvedBranch}`);
+    const approvedCommit = execFileSync("git", ["rev-parse", approvedBranch], { cwd: root, encoding: "utf8" }).trim();
+    assertEqual(sourceCommit, approvedCommit, "release commit on approved branch");
   }
 
   return {

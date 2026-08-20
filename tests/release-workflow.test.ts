@@ -13,6 +13,16 @@ describe("release workflow", () => {
     );
   });
 
+  it("publishes prereleases to the beta npm tag", () => {
+    const workflow = readFileSync(".github/workflows/release.yml", "utf8");
+
+    expect(workflow).toContain(
+      'npm publish "./release-assets/${{ needs.verify.outputs.artifact-filename }}" --provenance --access public --tag beta',
+    );
+    expect(workflow).not.toContain("release_tag=next");
+    expect(workflow).not.toContain("--tag next");
+  });
+
   it("verifies, publishes, and uploads one exact packed release artifact", () => {
     const workflow = readFileSync(".github/workflows/release.yml", "utf8");
 
@@ -21,7 +31,7 @@ describe("release workflow", () => {
     expect(workflow).toContain("VANILLASKY_PACKED_TARBALL: ./release-assets/${{ needs.verify.outputs.artifact-filename }}");
     expect(workflow).toContain("VANILLASKY_EXPECTED_INTEGRITY: ${{ needs.verify.outputs.integrity }}");
     expect(workflow).toContain('npm publish "./release-assets/${{ needs.verify.outputs.artifact-filename }}" --provenance --access public --tag latest');
-    expect(workflow).toContain('npm publish "./release-assets/${{ needs.verify.outputs.artifact-filename }}" --provenance --access public --tag next');
+    expect(workflow).toContain('npm publish "./release-assets/${{ needs.verify.outputs.artifact-filename }}" --provenance --access public --tag beta');
     expect(workflow).toContain("if: ${{ always() && hashFiles('artifacts/release-verification/**') != '' }}");
     expect(workflow).toContain("VANILLASKY_EXPECTED_SHA256:");
     expect(workflow).not.toContain("--clobber");

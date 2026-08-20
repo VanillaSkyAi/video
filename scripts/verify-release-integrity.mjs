@@ -37,8 +37,8 @@ if (mode === "file") {
   });
   console.log(`Published npm integrity verified: ${target}`);
 } else if (mode === "dist-tags") {
-  if (!target || !expectedIntegrity || !["latest", "next"].includes(expectedSha256)) {
-    throw new Error("Usage: verify-release-integrity.mjs dist-tags <package> <candidate-version> <latest|next>");
+  if (!target || !expectedIntegrity || !["latest", "beta"].includes(expectedSha256)) {
+    throw new Error("Usage: verify-release-integrity.mjs dist-tags <package> <candidate-version> <latest|beta>");
   }
   const output = execFileSync("npm", ["view", target, "dist-tags", "--json"], { encoding: "utf8" }).trim();
   const tags = assertDistTagsCoherent(JSON.parse(output), {
@@ -47,8 +47,8 @@ if (mode === "file") {
   });
   console.log(`npm dist-tags are coherent: ${Object.keys(tags).sort().join(", ")}`);
 } else if (mode === "dist-tags-transition") {
-  if (!target || !expectedIntegrity || !["latest", "next"].includes(expectedSha256)) {
-    throw new Error("Usage: verify-release-integrity.mjs dist-tags-transition <package> <candidate-version> <latest|next>");
+  if (!target || !expectedIntegrity || !["latest", "beta"].includes(expectedSha256)) {
+    throw new Error("Usage: verify-release-integrity.mjs dist-tags-transition <package> <candidate-version> <latest|beta>");
   }
   const result = spawnSync("npm", ["view", target, "dist-tags", "--json"], { encoding: "utf8" });
   if (result.error) throw result.error;

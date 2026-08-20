@@ -44,10 +44,9 @@ fails explicitly when the gate fails. Ordinary pull requests retain the normal
 install-then-governance path.
 
 This lifecycle prepares and reviews version files only. It does **not** publish,
-tag, create a GitHub release, or deploy the site. The existing tag-triggered
-publisher remains blocked until the next, separately reviewed main-only publish
-change lands. Do not use `release:prepare`, push a version tag, or publish a
-candidate during this boundary.
+tag, create a GitHub release, or deploy the site. After the reviewed Version
+Packages pull request merges, an annotated tag on that exact current `main`
+commit starts the OIDC publisher.
 
 ## Prepare the Version Packages pull request
 
@@ -69,11 +68,7 @@ Review and merge the Version Packages PR like any other protected change. Do
 not manually edit generated files on the branch. The public site adopts a
 published stable SDK later through its separate private workflow.
 
-## Temporarily blocked publishing reference
-
-The commands below describe the publisher that is still present in the
-repository. They are retained only until the main-only publishing change
-replaces them and must not be run during this transition.
+## Publish the reviewed candidate
 
 ### Before creating a release tag
 
@@ -95,9 +90,11 @@ repository, the clean checkout exactly matches approved `origin/main`, the
 package version is valid SemVer, and that version's tag is absent locally and
 remotely. Do not create or push the tag until it passes.
 
-### Prepare a candidate
+### Manual recovery only
 
-Start from an up-to-date release branch with the pinned toolchain. Write the
+Normal releases use the generated Version Packages pull request above. If that
+generation path is unavailable, start from an up-to-date release branch with
+the pinned toolchain. Write the
 candidate notes under `## Unreleased`, then prepare one explicit SemVer target.
 The command promotes those notes and synchronizes the package manifest,
 lockfile, README, public API status, install guides, examples, fixtures, and
@@ -123,7 +120,7 @@ release notes in a local directory for review. Otherwise they remain temporary.
 
 For a prerelease, pass its complete target, for example
 `npm run release:prepare -- 0.1.1-beta.0`. Prereleases publish under npm's
-`next` dist-tag and must be strictly newer than `latest`.
+`beta` dist-tag and must be strictly newer than `latest`.
 
 ### Tag and publish
 
@@ -135,7 +132,7 @@ git tag -a vX.Y.Z -m "vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-The release workflow verifies that the tag commit descends from approved main,
+The release workflow verifies that the tag commit exactly equals current approved main,
 builds one tarball, and passes that exact path and integrity to every consumer
 gate. It verifies package metadata, lockfile, changelog, README, examples,
 public entry points, browser/server boundaries, Vite, Next.js, package size,

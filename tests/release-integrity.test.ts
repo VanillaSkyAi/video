@@ -101,8 +101,8 @@ describe("release artifact integrity", () => {
       { candidateVersion: "0.1.0", candidateTag: "latest" },
     )).not.toThrow();
     expect(() => releaseIntegrity.assertDistTagsCoherent(
-      { latest: "0.1.0", next: "0.2.0-beta.1" },
-      { candidateVersion: "0.2.0-beta.1", candidateTag: "next" },
+      { latest: "0.1.0", beta: "0.2.0-beta.1" },
+      { candidateVersion: "0.2.0-beta.1", candidateTag: "beta" },
     )).not.toThrow();
     expect(() => releaseIntegrity.assertDistTagsCoherent(
       { latest: "0.0.9" },
@@ -110,19 +110,19 @@ describe("release artifact integrity", () => {
     )).toThrow("latest");
     expect(() => releaseIntegrity.assertDistTagsCoherent(
       { latest: "0.1.0" },
-      { candidateVersion: "0.2.0-beta.1", candidateTag: "next" },
-    )).toThrow("next");
+      { candidateVersion: "0.2.0-beta.1", candidateTag: "beta" },
+    )).toThrow("beta");
     expect(() => releaseIntegrity.assertDistTagsCoherent(
-      { latest: "0.1.0", next: "0.2.0-beta.1" },
+      { latest: "0.1.0", beta: "0.2.0-beta.1" },
       { candidateVersion: "0.2.0-beta.1", candidateTag: "latest" },
     )).toThrow("prerelease candidate");
     expect(() => releaseIntegrity.assertDistTagsCoherent(
-      { latest: "0.1.0", next: "0.2.0" },
-      { candidateVersion: "0.2.0", candidateTag: "next" },
+      { latest: "0.1.0", beta: "0.2.0" },
+      { candidateVersion: "0.2.0", candidateTag: "beta" },
     )).toThrow("stable candidate");
   });
 
-  it("rejects a publish transition that would make next older than latest", () => {
+  it("rejects a publish transition that would make beta older than latest", () => {
     expect(releaseIntegrity.assertDistTagTransitionCoherent).toBeTypeOf("function");
     if (typeof releaseIntegrity.assertDistTagTransitionCoherent !== "function") return;
 
@@ -131,12 +131,16 @@ describe("release artifact integrity", () => {
       { candidateVersion: "0.1.0", candidateTag: "latest" },
     )).not.toThrow();
     expect(() => releaseIntegrity.assertDistTagTransitionCoherent(
-      { latest: "1.0.0", next: "1.1.0-beta.1" },
+      { latest: "1.0.0", beta: "1.1.0-beta.1" },
       { candidateVersion: "1.2.0", candidateTag: "latest" },
+    )).not.toThrow();
+    expect(() => releaseIntegrity.assertDistTagTransitionCoherent(
+      { latest: "1.0.0" },
+      { candidateVersion: "0.9.0-beta.1", candidateTag: "beta" },
     )).toThrow("newer than latest");
     expect(() => releaseIntegrity.assertDistTagTransitionCoherent(
       {},
-      { candidateVersion: "0.2.0-beta.1", candidateTag: "next" },
+      { candidateVersion: "0.2.0-beta.1", candidateTag: "beta" },
     )).toThrow("latest must exist");
   });
 
@@ -148,20 +152,20 @@ describe("release artifact integrity", () => {
     for (const [tags, candidate] of [
       [{ latest: "1.2.0" }, { candidateVersion: "1.1.0", candidateTag: "latest" }],
       [{ latest: "1.2.0" }, { candidateVersion: "1.2.0", candidateTag: "latest" }],
-      [{ latest: "1.0.0", next: "1.1.0-beta.10" }, { candidateVersion: "1.1.0-beta.2", candidateTag: "next" }],
-      [{ latest: "1.0.0", next: "1.1.0-beta.2" }, { candidateVersion: "1.1.0-beta.2+new-build", candidateTag: "next" }],
-      [{ latest: "1.0.0", next: "1.1.0-a" }, { candidateVersion: "1.1.0-A", candidateTag: "next" }],
+      [{ latest: "1.0.0", beta: "1.1.0-beta.10" }, { candidateVersion: "1.1.0-beta.2", candidateTag: "beta" }],
+      [{ latest: "1.0.0", beta: "1.1.0-beta.2" }, { candidateVersion: "1.1.0-beta.2+new-build", candidateTag: "beta" }],
+      [{ latest: "1.0.0", beta: "1.1.0-a" }, { candidateVersion: "1.1.0-A", candidateTag: "beta" }],
     ] as const) {
       expect(() => transition(tags, candidate)).toThrow("strictly newer");
     }
 
     for (const [tags, candidate] of [
       [{}, { candidateVersion: "0.1.0", candidateTag: "latest" }],
-      [{ latest: "1.0.0" }, { candidateVersion: "1.1.0-beta.1", candidateTag: "next" }],
-      [{ latest: "1.0.0", next: "1.1.0-beta.2" }, { candidateVersion: "1.1.0-beta.10", candidateTag: "next" }],
-      [{ latest: "1.0.0", next: "1.1.0-beta.2" }, { candidateVersion: "1.1.0-beta.alpha", candidateTag: "next" }],
-      [{ latest: "1.0.0", next: "1.1.0-A" }, { candidateVersion: "1.1.0-a", candidateTag: "next" }],
-      [{ latest: "1.0.0", next: "2.0.0-beta.1" }, { candidateVersion: "1.1.0", candidateTag: "latest" }],
+      [{ latest: "1.0.0" }, { candidateVersion: "1.1.0-beta.1", candidateTag: "beta" }],
+      [{ latest: "1.0.0", beta: "1.1.0-beta.2" }, { candidateVersion: "1.1.0-beta.10", candidateTag: "beta" }],
+      [{ latest: "1.0.0", beta: "1.1.0-beta.2" }, { candidateVersion: "1.1.0-beta.alpha", candidateTag: "beta" }],
+      [{ latest: "1.0.0", beta: "1.1.0-A" }, { candidateVersion: "1.1.0-a", candidateTag: "beta" }],
+      [{ latest: "1.0.0", beta: "2.0.0-beta.1" }, { candidateVersion: "1.1.0", candidateTag: "latest" }],
     ] as const) {
       expect(() => transition(tags, candidate)).not.toThrow();
     }
@@ -176,16 +180,16 @@ describe("release artifact integrity", () => {
     if (typeof releaseIntegrity.assertDistTagsCoherent !== "function") return;
 
     expect(() => releaseIntegrity.assertDistTagsCoherent(
-      { latest: "1.0.0-a", next: "1.0.0-A" },
-      { candidateVersion: "1.0.0-A", candidateTag: "next" },
+      { latest: "1.0.0-a", beta: "1.0.0-A" },
+      { candidateVersion: "1.0.0-A", candidateTag: "beta" },
     )).toThrow("newer than latest");
     expect(() => releaseIntegrity.assertDistTagsCoherent(
-      { latest: "1.0.0-beta.2", next: "1.0.0-beta.10" },
-      { candidateVersion: "1.0.0-beta.10", candidateTag: "next" },
+      { latest: "1.0.0-beta.2", beta: "1.0.0-beta.10" },
+      { candidateVersion: "1.0.0-beta.10", candidateTag: "beta" },
     )).not.toThrow();
     expect(() => releaseIntegrity.assertDistTagsCoherent(
-      { latest: "1.0.0", next: "1.1.0-beta.01" },
-      { candidateVersion: "1.1.0-beta.01", candidateTag: "next" },
+      { latest: "1.0.0", beta: "1.1.0-beta.01" },
+      { candidateVersion: "1.1.0-beta.01", candidateTag: "beta" },
     )).toThrow("Invalid semantic version");
     expect(() => releaseIntegrity.assertValidSemver("1.0.0+build..1"))
       .toThrow("Invalid semantic version");

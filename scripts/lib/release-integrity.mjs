@@ -138,18 +138,18 @@ export function isPrereleaseSemver(version) {
 export function assertDistTagsCoherent(distTags, candidate = {}) {
   if (!distTags?.latest) throw new Error("npm latest must exist before dist-tag coherence can be verified");
   parseSemver(distTags.latest);
-  if (distTags.next) parseSemver(distTags.next);
-  if (distTags.next && compareSemver(distTags.next, distTags.latest) <= 0) {
-    throw new Error(`npm next ${distTags.next} must be newer than latest ${distTags.latest}`);
-  }
+  if (distTags.beta) parseSemver(distTags.beta);
   const { candidateVersion, candidateTag } = candidate;
   if (candidateVersion || candidateTag) {
-    if (!candidateVersion || !["latest", "next"].includes(candidateTag)) {
-      throw new Error("Candidate version and latest/next tag are required for npm dist-tag verification");
+    if (!candidateVersion || !["latest", "beta"].includes(candidateTag)) {
+      throw new Error("Candidate version and latest/beta tag are required for npm dist-tag verification");
     }
     const candidatePrerelease = parseSemver(candidateVersion).prerelease.length > 0;
-    if (candidatePrerelease && candidateTag !== "next") {
-      throw new Error(`npm prerelease candidate ${candidateVersion} must own next, not ${candidateTag}`);
+    if (candidatePrerelease && candidateTag !== "beta") {
+      throw new Error(`npm prerelease candidate ${candidateVersion} must own beta, not ${candidateTag}`);
+    }
+    if (candidatePrerelease && compareSemver(candidateVersion, distTags.latest) <= 0) {
+      throw new Error(`npm beta candidate ${candidateVersion} must be newer than latest ${distTags.latest}`);
     }
     if (!candidatePrerelease && candidateTag !== "latest") {
       throw new Error(`npm stable candidate ${candidateVersion} must own latest, not ${candidateTag}`);
@@ -158,12 +158,12 @@ export function assertDistTagsCoherent(distTags, candidate = {}) {
       throw new Error(`npm ${candidateTag} ${distTags[candidateTag] ?? "is missing"}, expected candidate ${candidateVersion}`);
     }
   }
-  return { latest: distTags.latest, ...(distTags.next ? { next: distTags.next } : {}) };
+  return { latest: distTags.latest, ...(distTags.beta ? { beta: distTags.beta } : {}) };
 }
 
 export function assertDistTagTransitionCoherent(distTags, candidate) {
-  if (!candidate?.candidateVersion || !["latest", "next"].includes(candidate.candidateTag)) {
-    throw new Error("Candidate version and latest/next tag are required for npm dist-tag transition verification");
+  if (!candidate?.candidateVersion || !["latest", "beta"].includes(candidate.candidateTag)) {
+    throw new Error("Candidate version and latest/beta tag are required for npm dist-tag transition verification");
   }
   const currentTarget = distTags?.[candidate.candidateTag];
   if (currentTarget !== undefined && compareSemver(candidate.candidateVersion, currentTarget) <= 0) {

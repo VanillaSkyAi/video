@@ -54,6 +54,11 @@ npm run changeset:status
 npm run changeset:check
 ```
 
+A breaking change, including a pre-1.0 minor, requires explicit approval from
+Joris before implementation or merge. Breaking-change notes and migration
+evidence are required context, but migration evidence does not count as
+approval.
+
 Pending Changesets are immutable after merge. The Version Packages workflow
 consumes them on a dedicated beta candidate branch; contributors and ordinary
 pull requests never edit or remove them. That immutability also covers the beta
