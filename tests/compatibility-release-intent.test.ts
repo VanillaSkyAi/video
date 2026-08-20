@@ -300,6 +300,49 @@ describe("compatibility release intent", () => {
     expect(findBreakingChangeEvidence(intent)).toBeUndefined();
   });
 
+  it.each([
+    {
+      name: "version and Minor Changes headings",
+      lines: [
+        "```md",
+        "## 0.2.0",
+        "### Minor Changes",
+        "```",
+      ],
+    },
+    {
+      name: "Minor Changes heading",
+      lines: [
+        "## 0.2.0",
+        "",
+        "```md",
+        "### Minor Changes",
+        "```",
+      ],
+    },
+  ])("does not discover $name inside an outer changelog fence", ({ lines }) => {
+    const root = fixtureRoot();
+    writeFileSync(join(root, "CHANGELOG.md"), [
+      "# Changelog",
+      "",
+      ...lines,
+      "- 1234567: Remove the root parser export.",
+      "  ",
+      ...validEvidenceBody().split("\n").slice(2).map((line) => `  ${line}`),
+      "",
+      "## 0.1.0",
+      "Initial release.",
+    ].join("\n"));
+    const intent = readCompatibilityReleaseIntent({
+      root,
+      packageName,
+      baselineVersion: "0.1.0",
+      candidateVersion: "0.2.0",
+    });
+
+    expect(findBreakingChangeEvidence(intent)).toBeUndefined();
+  });
+
   it("requires one plain summary line followed by a blank line", () => {
     const summaryless = validEvidenceBody().split("\n").slice(2).join("\n");
     const twoLineSummary = validEvidenceBody().replace(

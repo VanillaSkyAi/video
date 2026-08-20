@@ -70,27 +70,57 @@ function pendingChangesetIntent(root, packageName, baseSha) {
 function changelogSection(root, candidateVersion) {
   const path = join(root, "CHANGELOG.md");
   if (!existsSync(path)) return undefined;
-  const changelog = readFileSync(path, "utf8");
-  const escapedVersion = escapeRegExp(candidateVersion);
-  const heading = new RegExp(`^##\\s+${escapedVersion}\\s*$`, "m").exec(changelog);
-  if (!heading) return undefined;
-  const bodyStart = heading.index + heading[0].length;
-  const tail = changelog.slice(bodyStart);
-  const nextHeading = tail.search(/^##\s+/m);
-  const lines = tail.slice(0, nextHeading < 0 ? undefined : nextHeading)
-    .replaceAll("\r\n", "\n")
-    .split("\n");
-  while (lines[0]?.trim() === "") lines.shift();
-  while (lines.at(-1)?.trim() === "") lines.pop();
-  return lines.join("\n");
+  const lines = readFileSync(path, "utf8").replaceAll("\r\n", "\n").split("\n");
+  const candidateHeading = `## ${candidateVersion}`;
+  let bodyStart;
+  let bodyEnd = lines.length;
+  let outerFence;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (outerFence) {
+      if (isFenceClosing(line, outerFence)) outerFence = undefined;
+      continue;
+    }
+    const opening = fenceOpening(line);
+    if (opening) {
+      outerFence = opening;
+      continue;
+    }
+    if (bodyStart === undefined) {
+      if (line.trimEnd() === candidateHeading) bodyStart = index + 1;
+      continue;
+    }
+    if (/^##\s+/.test(line)) {
+      bodyEnd = index;
+      break;
+    }
+  }
+  if (bodyStart === undefined) return undefined;
+  const section = lines.slice(bodyStart, bodyEnd);
+  while (section[0]?.trim() === "") section.shift();
+  while (section.at(-1)?.trim() === "") section.pop();
+  return section.join("\n");
 }
 
 function canonicalMinorChangelogEvidence(section, source) {
   const lines = section.split("\n");
   const evidence = [];
   let inMinorChanges = false;
+  let outerFence;
   for (let index = 0; index < lines.length;) {
     const line = lines[index];
+    if (outerFence) {
+      if (isFenceClosing(line, outerFence)) outerFence = undefined;
+      index += 1;
+      continue;
+    }
+    const opening = fenceOpening(line);
+    if (opening) {
+      outerFence = opening;
+      inMinorChanges = false;
+      index += 1;
+      continue;
+    }
     if (/^###\s+/.test(line)) {
       inMinorChanges = line === "### Minor Changes";
       index += 1;
