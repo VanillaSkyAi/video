@@ -6,6 +6,12 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 <!-- Add release notes here before running release:prepare. -->
 
+## 0.1.1-beta.1
+
+### Patch Changes
+
+- 9c42eb7: Publish the customer-compatible beta through the read-only npm API comparison.
+
 ## 0.1.1-beta.0
 
 ### Patch Changes

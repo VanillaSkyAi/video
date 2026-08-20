@@ -5,7 +5,7 @@
 Install VanillaSky and one AI SDK provider:
 
 ```bash
-npm install @vanillaskyai/video@0.1.1-beta.0 ai @ai-sdk/openai
+npm install @vanillaskyai/video@0.1.1-beta.1 ai @ai-sdk/openai
 ```
 
 Create an ignored `.env.local`:
@@ -71,7 +71,7 @@ requests; replace it with your application's session validation before
 deploying.
 
 The copy-and-run app is in the
-[`examples/nextjs-quickstart` directory](https://github.com/VanillaSkyAi/video/tree/v0.1.1-beta.0/examples/nextjs-quickstart).
+[`examples/nextjs-quickstart` directory](https://github.com/VanillaSkyAi/video/tree/v0.1.1-beta.1/examples/nextjs-quickstart).
 
 For another LLM, replace `openai(...)` with the matching AI SDK model. The route
 shape and React code stay the same. See [Provider integration](provider-integration.md)
