@@ -161,6 +161,18 @@ describe("Version Packages generation", () => {
     expect(existsSync(join(root, ".changeset/pre.json"))).toBe(false);
   });
 
+  it("generates from an exact detached main SHA without requiring a local main branch", () => {
+    const { baseRef, root } = createFixture();
+    git(root, "checkout", "--detach", baseRef);
+    git(root, "branch", "--delete", "main");
+
+    expect(generateVersionPackages({ root, changesetsCliPath })).toMatchObject({
+      changed: true,
+      previousVersion: "0.1.0",
+      version: "0.1.1-beta.0",
+    });
+  });
+
   it("fails closed instead of changing a non-beta prerelease mode", () => {
     const { root } = createFixture();
     json(root, ".changeset/pre.json", { mode: "pre", tag: "next" });

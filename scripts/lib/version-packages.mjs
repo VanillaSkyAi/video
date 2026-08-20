@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseChangesetFile } from "@changesets/parse";
 import { synchronizeVersionSurfaces } from "./version-surfaces.mjs";
 
 export const VERSION_PACKAGES_BRANCH = "changeset-release/main";
@@ -35,17 +36,6 @@ function runChangesets(root, cliPath, args) {
   });
 }
 
-function readReleaseStatus(root, cliPath) {
-  const outputRoot = mkdtempSync(join(tmpdir(), "vanillasky-changeset-status-"));
-  const outputPath = join(outputRoot, "status.json");
-  try {
-    runChangesets(root, cliPath, ["status", "--output", outputPath]);
-    return readJson(outputPath);
-  } finally {
-    rmSync(outputRoot, { recursive: true, force: true });
-  }
-}
-
 function assertBetaMode(root) {
   const path = join(root, ".changeset/pre.json");
   if (!existsSync(path)) return false;
@@ -65,9 +55,11 @@ export function generateVersionPackages({ root, changesetsCliPath = defaultChang
   if (pendingRecords.length === 0) {
     return { changed: false, previousVersion, version: previousVersion };
   }
-  const status = readReleaseStatus(repositoryRoot, changesetsCliPath);
-  const packageRelease = status.releases.find((release) => release.name === PACKAGE_NAME);
-  const unsupported = status.releases.filter((release) => release.name !== PACKAGE_NAME);
+  const releases = pendingRecords.flatMap((entry) => parseChangesetFile(
+    readFileSync(join(repositoryRoot, ".changeset", entry.name), "utf8"),
+  ).releases);
+  const packageRelease = releases.find((release) => release.name === PACKAGE_NAME);
+  const unsupported = releases.filter((release) => release.name !== PACKAGE_NAME);
   if (unsupported.length > 0) {
     throw new Error(`Version Packages found unsupported release package(s): ${unsupported.map((release) => release.name).join(", ")}`);
   }
