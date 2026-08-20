@@ -49,6 +49,7 @@ jobs:
       - run: npx playwright install chromium
       - run: npm run examples:verify-documented
       # Separately exercise the locally packed release candidate and ownership path.
+      - run: npm run verify:api
       - run: npm run verify:package
       - run: npm run verify:onboarding
       - run: npm run examples:install-current

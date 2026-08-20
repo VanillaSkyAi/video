@@ -222,6 +222,15 @@ describe("release workflow", () => {
     expect(workflow.match(/timeout-minutes:/g)).toHaveLength(6);
   });
 
+  it("enforces the live npm-latest public API comparison in pull-request CI", () => {
+    const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+    const consumerJob = workflow.split("  consumer-compatibility:")[1].split("  provider-compatibility:")[0];
+
+    expect(workflow).toContain("pull_request:");
+    expect(consumerJob).toContain("- run: npm run verify:api");
+    expect(consumerJob.indexOf("npm ci")).toBeLessThan(consumerJob.indexOf("npm run verify:api"));
+  });
+
   it("compiles the source-owned template tree in the clean-room consumer", () => {
     const verifier = readFileSync("scripts/verify-onboarding.mjs", "utf8");
 
