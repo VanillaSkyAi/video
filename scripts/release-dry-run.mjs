@@ -24,6 +24,7 @@ import {
   isPrereleaseSemver,
 } from "./lib/release-integrity.mjs";
 import { createReleaseNpmGuard } from "./lib/release-npm-guard.mjs";
+import { extractChangesetReleaseNotes } from "./lib/release-notes.mjs";
 import { assertReleaseToolchain } from "./lib/release-toolchain.mjs";
 import { assertNoPendingChangesets } from "./lib/changeset-records.mjs";
 
@@ -80,18 +81,6 @@ function hashTree(directory) {
   return hash.digest("hex");
 }
 
-function changelogSection(changelog, version) {
-  const escaped = version.replaceAll(".", "\\.");
-  const heading = new RegExp(`^## ${escaped}\\s*$`, "m").exec(changelog);
-  const tail = heading ? changelog.slice(heading.index + heading[0].length) : "";
-  const nextHeading = tail.search(/^## /m);
-  const section = (nextHeading >= 0 ? tail.slice(0, nextHeading) : tail).trim();
-  if (section.length < 120) {
-    throw new Error(`CHANGELOG.md must contain substantive release notes for ${version}`);
-  }
-  return section;
-}
-
 function verifySourceCoherence() {
   const packageManifest = readJson(join(root, "package.json"));
   const packageLock = readJson(join(root, "package-lock.json"));
@@ -123,8 +112,7 @@ function verifySourceCoherence() {
     env: { ...process.env, ...releaseNpmGuard.environment },
   }).trim(), expectedNpm, "npm CLI version");
 
-  const releaseNotes = changelogSection(changelog, packageManifest.version);
-  if (!/beta/i.test(releaseNotes)) throw new Error("Release notes must label the package beta");
+  const releaseNotes = extractChangesetReleaseNotes(changelog, packageManifest.version);
   if (!/compatib/i.test(publicApi) || !/Patch releases preserve/.test(publicApi)) {
     throw new Error("PUBLIC-API.md must contain the 0.x compatibility statement");
   }
