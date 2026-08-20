@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const CHANGESET_RECORD = /^\.changeset\/[^/]+\.md$/;
@@ -12,6 +12,17 @@ export function listPendingChangesetPaths({ root }) {
     .map((entry) => `.changeset/${entry.name}`)
     .filter((path) => path !== ".changeset/README.md" && CHANGESET_RECORD.test(path))
     .sort();
+}
+
+export function listPendingPackageChangesetPaths({ root }) {
+  const repositoryRoot = resolve(root);
+  return listPendingChangesetPaths({ root: repositoryRoot }).filter((path) => {
+    const contents = readFileSync(join(repositoryRoot, path), "utf8").replaceAll("\r\n", "\n");
+    const lines = contents.split("\n");
+    const end = lines.indexOf("---", 1);
+    if (lines[0] !== "---" || end < 1) throw new Error(`Changeset ${path} has malformed frontmatter`);
+    return lines.slice(1, end).join("\n").trim().length > 0;
+  });
 }
 
 export function assertCommittedRegularFile({ root, path, ref = "HEAD", label = "File" }) {
@@ -38,9 +49,9 @@ export function assertChangesetRecordFile({ root, path, ref = "HEAD" }) {
   assertCommittedRegularFile({ root, path, ref, label: "Changeset" });
 }
 
-export function assertNoPendingChangesets({ root }) {
-  const pendingChangesets = listPendingChangesetPaths({ root });
+export function assertNoPendingPackageChangesets({ root }) {
+  const pendingChangesets = listPendingPackageChangesetPaths({ root });
   if (pendingChangesets.length > 0) {
-    throw new Error(`Release is blocked while pending Changesets exist: ${pendingChangesets.join(", ")}`);
+    throw new Error(`Release is blocked while pending package Changesets exist: ${pendingChangesets.join(", ")}`);
   }
 }

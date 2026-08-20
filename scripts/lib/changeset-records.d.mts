@@ -1,4 +1,5 @@
 export function listPendingChangesetPaths(options: { root: string }): string[];
+export function listPendingPackageChangesetPaths(options: { root: string }): string[];
 
 export function assertChangesetRecordFile(options: {
   root: string;
@@ -13,4 +14,4 @@ export function assertCommittedRegularFile(options: {
   label?: string;
 }): void;
 
-export function assertNoPendingChangesets(options: { root: string }): void;
+export function assertNoPendingPackageChangesets(options: { root: string }): void;
