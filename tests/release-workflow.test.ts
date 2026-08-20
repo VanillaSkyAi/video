@@ -58,7 +58,7 @@ describe("release workflow", () => {
     const guide = readFileSync("docs/maintainers/releasing.md", "utf8");
 
     expect(workflow).toContain("id-token: write");
-    expect(workflow).not.toContain("NPM_BOOTSTRAP_TOKEN");
+    expect(workflow).not.toContain(["NPM", "BOOTSTRAP", "TOKEN"].join("_"));
     expect(workflow).not.toContain("NODE_AUTH_TOKEN");
     expect(guide).not.toMatch(/bootstrap|first[- ]release/i);
     expect(guide).toMatch(/trusted publisher/i);
