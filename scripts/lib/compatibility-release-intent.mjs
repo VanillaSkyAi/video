@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fromMarkdown } from "mdast-util-from-markdown";
 import { compareSemver, parseSemver } from "./release-integrity.mjs";
 
 const RELEASE_TYPE_RANK = { patch: 0, minor: 1, major: 2 };
@@ -67,78 +68,99 @@ function pendingChangesetIntent(root, packageName, baseSha) {
   };
 }
 
-function changelogSection(root, candidateVersion) {
-  const path = join(root, "CHANGELOG.md");
-  if (!existsSync(path)) return undefined;
-  const lines = readFileSync(path, "utf8").replaceAll("\r\n", "\n").split("\n");
-  const candidateHeading = `## ${candidateVersion}`;
-  let bodyStart;
-  let bodyEnd = lines.length;
-  let outerFence;
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (outerFence) {
-      if (isFenceClosing(line, outerFence)) outerFence = undefined;
-      continue;
-    }
-    const opening = fenceOpening(line);
-    if (opening) {
-      outerFence = opening;
-      continue;
-    }
-    if (bodyStart === undefined) {
-      if (line.trimEnd() === candidateHeading) bodyStart = index + 1;
-      continue;
-    }
-    if (/^##\s+/.test(line)) {
-      bodyEnd = index;
-      break;
-    }
-  }
-  if (bodyStart === undefined) return undefined;
-  const section = lines.slice(bodyStart, bodyEnd);
-  while (section[0]?.trim() === "") section.shift();
-  while (section.at(-1)?.trim() === "") section.pop();
-  return section.join("\n");
+function markdownText(node) {
+  if (typeof node.value === "string") return node.value;
+  return (node.children ?? []).map(markdownText).join("");
 }
 
-function canonicalMinorChangelogEvidence(section, source) {
-  const lines = section.split("\n");
+function isHeading(node, depth, text) {
+  return node.type === "heading" && node.depth === depth && markdownText(node) === text;
+}
+
+function sectionEnd(children, start, maximumHeadingDepth) {
+  const nextHeading = children.findIndex((node, index) =>
+    index >= start && node.type === "heading" && node.depth <= maximumHeadingDepth);
+  return nextHeading === -1 ? children.length : nextHeading;
+}
+
+function codeFence(value) {
+  const backticks = Math.max(0, ...Array.from(value.matchAll(/`+/g), (match) => match[0].length));
+  const tildes = Math.max(0, ...Array.from(value.matchAll(/~+/g), (match) => match[0].length));
+  const marker = backticks <= tildes ? "`" : "~";
+  return marker.repeat(Math.max(3, (marker === "`" ? backticks : tildes) + 1));
+}
+
+function isFencedCodeNode(node, markdown) {
+  const offset = node.position?.start.offset;
+  if (offset === undefined) return false;
+  const lineEnd = markdown.indexOf("\n", offset);
+  const openingLine = markdown.slice(offset, lineEnd === -1 ? markdown.length : lineEnd);
+  return fenceOpening(openingLine) !== undefined;
+}
+
+function canonicalEvidenceBody(listItem, markdown) {
+  if (listItem.type !== "listItem" || listItem.children.length === 0) return undefined;
+  const [summary, ...details] = listItem.children;
+  if (summary.type !== "paragraph"
+    || summary.position?.start.line !== summary.position?.end.line) return undefined;
+  const summaryText = markdownText(summary);
+  if (!isPlainSummary(summaryText)) return undefined;
+
+  let phase = "introduction";
+  const codeFences = { breaking: 0, adoption: 0 };
+  const body = [summaryText, ""];
+  for (const node of details) {
+    if (node.type === "heading") {
+      const heading = markdownText(node);
+      if (node.depth === 3 && heading === "Breaking changes" && phase === "introduction") {
+        phase = "breaking";
+      } else if (node.depth === 3 && heading === "Adoption"
+        && phase === "breaking" && codeFences.breaking === 1) {
+        phase = "adoption";
+      } else {
+        return undefined;
+      }
+      body.push(`### ${heading}`);
+      continue;
+    }
+    if (node.type === "code") {
+      if (phase !== "breaking" && phase !== "adoption") return undefined;
+      if (!isFencedCodeNode(node, markdown)
+        || !isConcreteCode([node.value]) || codeFences[phase] !== 0) return undefined;
+      codeFences[phase] += 1;
+      const fence = codeFence(node.value);
+      body.push(fence, node.value, fence);
+      continue;
+    }
+    if (node.type !== "paragraph") return undefined;
+    body.push(markdownText(node));
+  }
+  if (phase !== "adoption" || codeFences.breaking !== 1 || codeFences.adoption !== 1) {
+    return undefined;
+  }
+  return body.join("\n");
+}
+
+function canonicalMinorChangelogEvidence(root, candidateVersion, source) {
+  const path = join(root, "CHANGELOG.md");
+  if (!existsSync(path)) return [];
+  const markdown = readFileSync(path, "utf8");
+  const { children } = fromMarkdown(markdown);
+  const candidateIndex = children.findIndex((node) => isHeading(node, 2, candidateVersion));
+  if (candidateIndex === -1) return [];
+  const candidateEnd = sectionEnd(children, candidateIndex + 1, 2);
   const evidence = [];
-  let inMinorChanges = false;
-  let outerFence;
-  for (let index = 0; index < lines.length;) {
-    const line = lines[index];
-    if (outerFence) {
-      if (isFenceClosing(line, outerFence)) outerFence = undefined;
-      index += 1;
-      continue;
+  for (let index = candidateIndex + 1; index < candidateEnd; index += 1) {
+    if (!isHeading(children[index], 3, "Minor Changes")) continue;
+    const groupEnd = Math.min(sectionEnd(children, index + 1, 3), candidateEnd);
+    for (const node of children.slice(index + 1, groupEnd)) {
+      if (node.type !== "list" || node.ordered) continue;
+      for (const listItem of node.children) {
+        const body = canonicalEvidenceBody(listItem, markdown);
+        if (body) evidence.push({ source, body });
+      }
     }
-    const opening = fenceOpening(line);
-    if (opening) {
-      outerFence = opening;
-      inMinorChanges = false;
-      index += 1;
-      continue;
-    }
-    if (/^###\s+/.test(line)) {
-      inMinorChanges = line === "### Minor Changes";
-      index += 1;
-      continue;
-    }
-    if (!inMinorChanges || !line.startsWith("- ")) {
-      index += 1;
-      continue;
-    }
-    const body = [line.slice(2)];
-    let canonical = true;
-    index += 1;
-    while (index < lines.length && !lines[index].startsWith("- ") && !/^###\s+/.test(lines[index])) {
-      if (!lines[index].startsWith("  ")) canonical = false;
-      else body.push(lines[index].slice(2));
-      index += 1;
-    }
-    if (canonical) evidence.push({ source, body: body.join("\n") });
+    index = groupEnd - 1;
   }
   return evidence;
 }
@@ -230,12 +252,11 @@ export function readCompatibilityReleaseIntent({
   if (comparison === 0) return pendingChangesetIntent(repositoryRoot, packageName, baseSha);
 
   const releaseType = versionReleaseType(baselineVersion, candidateVersion);
-  const body = changelogSection(repositoryRoot, candidateVersion);
   const source = `CHANGELOG.md#${candidateVersion}`;
   return {
     releaseType,
-    evidence: body && releaseType === "minor"
-      ? canonicalMinorChangelogEvidence(body, source)
+    evidence: releaseType === "minor"
+      ? canonicalMinorChangelogEvidence(repositoryRoot, candidateVersion, source)
       : [],
   };
 }

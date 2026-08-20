@@ -370,6 +370,143 @@ describe("compatibility release intent", () => {
     expect(findBreakingChangeEvidence(intent)).toBeUndefined();
   });
 
+  it.each([
+    {
+      name: "HTML comment",
+      opening: "<!--",
+      closing: "-->",
+    },
+    {
+      name: "HTML block",
+      opening: "<div>",
+      closing: "</div>",
+    },
+  ])("does not discover candidate headings inside an outer $name", ({ opening, closing }) => {
+    const root = fixtureRoot();
+    writeFileSync(join(root, "CHANGELOG.md"), [
+      "# Changelog",
+      "",
+      opening,
+      "## 0.2.0",
+      "### Minor Changes",
+      closing,
+      `- ${validEvidenceBody().split("\n")[0]}`,
+      ...validEvidenceBody().split("\n").slice(1).map((line) => `  ${line}`),
+      "",
+      "## 0.1.0",
+      "Initial release.",
+    ].join("\n"));
+    const intent = readCompatibilityReleaseIntent({
+      root,
+      packageName,
+      baselineVersion: "0.1.0",
+      candidateVersion: "0.2.0",
+    });
+
+    expect(findBreakingChangeEvidence(intent)).toBeUndefined();
+  });
+
+  it.each([
+    {
+      name: "HTML comment",
+      opening: "<!--",
+      closing: "-->",
+    },
+    {
+      name: "HTML block",
+      opening: "<div>",
+      closing: "</div>",
+    },
+  ])("does not discover a Minor Changes group inside an outer $name", ({ opening, closing }) => {
+    const root = fixtureRoot();
+    writeFileSync(join(root, "CHANGELOG.md"), [
+      "# Changelog",
+      "",
+      "## 0.2.0",
+      "",
+      opening,
+      "### Minor Changes",
+      closing,
+      `- ${validEvidenceBody().split("\n")[0]}`,
+      ...validEvidenceBody().split("\n").slice(1).map((line) => `  ${line}`),
+    ].join("\n"));
+    const intent = readCompatibilityReleaseIntent({
+      root,
+      packageName,
+      baselineVersion: "0.1.0",
+      candidateVersion: "0.2.0",
+    });
+
+    expect(findBreakingChangeEvidence(intent)).toBeUndefined();
+  });
+
+  it.each([
+    {
+      name: "HTML comment",
+      opening: "<!--",
+      closing: "-->",
+    },
+    {
+      name: "HTML block",
+      opening: "<div>",
+      closing: "</div>",
+    },
+  ])("does not discover breaking evidence boundaries inside an $name", ({ opening, closing }) => {
+    const root = fixtureRoot();
+    writeFileSync(join(root, "CHANGELOG.md"), [
+      "# Changelog",
+      "",
+      "## 0.2.0",
+      "",
+      "### Minor Changes",
+      "",
+      `- ${validEvidenceBody().split("\n")[0]}`,
+      "  ",
+      `  ${opening}`,
+      ...validEvidenceBody().split("\n").slice(2).map((line) => `  ${line}`),
+      `  ${closing}`,
+    ].join("\n"));
+    const intent = readCompatibilityReleaseIntent({
+      root,
+      packageName,
+      baselineVersion: "0.1.0",
+      candidateVersion: "0.2.0",
+    });
+
+    expect(findBreakingChangeEvidence(intent)).toBeUndefined();
+  });
+
+  it("does not turn indented changelog code blocks into fenced adoption examples", () => {
+    const root = fixtureRoot();
+    writeFileSync(join(root, "CHANGELOG.md"), [
+      "# Changelog",
+      "",
+      "## 0.2.0",
+      "",
+      "### Minor Changes",
+      "",
+      "- Remove the root parser export.",
+      "  ",
+      "  ### Breaking changes",
+      "  Before:",
+      "",
+      "      oldApi();",
+      "  ",
+      "  ### Adoption",
+      "  After:",
+      "",
+      "      newApi();",
+    ].join("\n"));
+    const intent = readCompatibilityReleaseIntent({
+      root,
+      packageName,
+      baselineVersion: "0.1.0",
+      candidateVersion: "0.2.0",
+    });
+
+    expect(findBreakingChangeEvidence(intent)).toBeUndefined();
+  });
+
   it("treats four leading spaces as indented code rather than an outer fence", () => {
     const root = fixtureRoot();
     writeFileSync(join(root, "CHANGELOG.md"), [
