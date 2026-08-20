@@ -107,6 +107,55 @@ describe("compatibility release intent", () => {
     });
   });
 
+  it.each([
+    {
+      name: "HTML comment",
+      opening: "<!--",
+      closing: "-->",
+    },
+    {
+      name: "HTML block",
+      opening: "<div>",
+      closing: "</div>",
+    },
+  ])("does not accept pending Changeset headings and fences inside an $name", ({ opening, closing }) => {
+    const root = gitFixtureRoot();
+    const baseSha = git(root, "rev-parse", "HEAD");
+    mkdirSync(join(root, ".changeset"));
+    writeFileSync(join(root, ".changeset", "hidden-evidence.md"), [
+      "---",
+      `"${packageName}": minor`,
+      "---",
+      "",
+      "Remove the root parser export.",
+      "",
+      opening,
+      "### Breaking changes",
+      "Before:",
+      "```ts",
+      "oldApi();",
+      "```",
+      "### Adoption",
+      "After:",
+      "```ts",
+      "newApi();",
+      "```",
+      closing,
+      "",
+    ].join("\n"));
+    commit(root, "add hidden breaking evidence");
+
+    const intent = readCompatibilityReleaseIntent({
+      root,
+      packageName,
+      baselineVersion: "0.1.0",
+      candidateVersion: "0.1.0",
+      baseSha,
+    });
+    expect(intent).toMatchObject({ releaseType: "minor" });
+    expect(findBreakingChangeEvidence(intent)).toBeUndefined();
+  });
+
   it("does not treat a patch Changeset as future minor intent", () => {
     const root = gitFixtureRoot();
     const baseSha = git(root, "rev-parse", "HEAD");
@@ -532,12 +581,14 @@ describe("compatibility release intent", () => {
 
   it("requires one plain summary line followed by a blank line", () => {
     const summaryless = validEvidenceBody().split("\n").slice(2).join("\n");
+    const missingBlank = validEvidenceBody().replace("\n\n### Breaking changes", "\n### Breaking changes");
     const twoLineSummary = validEvidenceBody().replace(
       "\n\n### Breaking changes",
       "\nA second summary line.\n\n### Breaking changes",
     );
 
     expect(findBreakingChangeEvidence(minorIntent(summaryless))).toBeUndefined();
+    expect(findBreakingChangeEvidence(minorIntent(missingBlank))).toBeUndefined();
     expect(findBreakingChangeEvidence(minorIntent(twoLineSummary))).toBeUndefined();
   });
 

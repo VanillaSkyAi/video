@@ -98,13 +98,19 @@ function isFencedCodeNode(node, markdown) {
   return fenceOpening(openingLine) !== undefined;
 }
 
-function canonicalEvidenceBody(listItem, markdown) {
-  if (listItem.type !== "listItem" || listItem.children.length === 0) return undefined;
-  const [summary, ...details] = listItem.children;
+function canonicalEvidenceBody(blocks, markdown) {
+  if (blocks.length === 0) return undefined;
+  const [summary, ...details] = blocks;
   if (summary.type !== "paragraph"
     || summary.position?.start.line !== summary.position?.end.line) return undefined;
   const summaryText = markdownText(summary);
   if (!isPlainSummary(summaryText)) return undefined;
+  const firstDetailOffset = details[0]?.position?.start.offset;
+  const summaryEndOffset = summary.position?.end.offset;
+  if (firstDetailOffset === undefined || summaryEndOffset === undefined
+    || !/\r?\n[\t ]*\r?\n/.test(markdown.slice(summaryEndOffset, firstDetailOffset))) {
+    return undefined;
+  }
 
   let phase = "introduction";
   const codeFences = { breaking: 0, adoption: 0 };
@@ -126,6 +132,8 @@ function canonicalEvidenceBody(listItem, markdown) {
     if (node.type === "code") {
       if (phase !== "breaking" && phase !== "adoption") return undefined;
       if (!isFencedCodeNode(node, markdown)
+        || node.value.split(/\r?\n/).some((line) =>
+          /^ {0,3}### (?:Breaking changes|Adoption)$/.test(line))
         || !isConcreteCode([node.value]) || codeFences[phase] !== 0) return undefined;
       codeFences[phase] += 1;
       const fence = codeFence(node.value);
@@ -156,7 +164,7 @@ function canonicalMinorChangelogEvidence(root, candidateVersion, source) {
     for (const node of children.slice(index + 1, groupEnd)) {
       if (node.type !== "list" || node.ordered) continue;
       for (const listItem of node.children) {
-        const body = canonicalEvidenceBody(listItem, markdown);
+        const body = canonicalEvidenceBody(listItem.children, markdown);
         if (body) evidence.push({ source, body });
       }
     }
@@ -177,59 +185,13 @@ function fenceOpening(line) {
   return { marker: match[1][0], length: match[1].length };
 }
 
-function isFenceClosing(line, fence) {
-  const escapedMarker = escapeRegExp(fence.marker);
-  return new RegExp(`^ {0,3}${escapedMarker}{${fence.length},}\\s*$`).test(line);
-}
-
 function isConcreteCode(lines) {
   const code = lines.join("\n").trim();
   return code.length >= 4 && !/^(?:\.\.\.|todo|tbd|before|after)$/i.test(code);
 }
 
 function hasStructuredBreakingEvidence(markdown) {
-  const lines = markdown.replaceAll("\r\n", "\n").split("\n");
-  if (!isPlainSummary(lines[0] ?? "") || lines[1]?.trim() !== "") return false;
-
-  let phase = "introduction";
-  let fence;
-  const codeFences = { breaking: 0, adoption: 0 };
-  for (const line of lines.slice(2)) {
-    if (fence) {
-      if (/^ {0,3}### (?:Breaking changes|Adoption)$/.test(line)) return false;
-      if (isFenceClosing(line, fence)) {
-        if (!isConcreteCode(fence.code)) return false;
-        codeFences[fence.phase] += 1;
-        fence = undefined;
-      } else {
-        fence.code.push(line);
-      }
-      continue;
-    }
-
-    const opening = fenceOpening(line);
-    if (opening) {
-      if (phase !== "breaking" && phase !== "adoption") return false;
-      fence = { ...opening, phase, code: [] };
-      continue;
-    }
-
-    if (/^#{1,6}(?:\s|$)/.test(line)) {
-      if (line === "### Breaking changes" && phase === "introduction") {
-        phase = "breaking";
-        continue;
-      }
-      if (line === "### Adoption" && phase === "breaking" && codeFences.breaking === 1) {
-        phase = "adoption";
-        continue;
-      }
-      return false;
-    }
-  }
-  return fence === undefined
-    && phase === "adoption"
-    && codeFences.breaking === 1
-    && codeFences.adoption === 1;
+  return canonicalEvidenceBody(fromMarkdown(markdown).children, markdown) !== undefined;
 }
 
 export function findBreakingChangeEvidence(releaseIntent) {
