@@ -65,6 +65,10 @@ describe("fresh 0.1 candidate cleanup", () => {
     expect(unapprovedSourceHits([oldPackage, oldRepository, oldVersion])).toEqual([]);
   });
 
+  it("contains no bootstrap publishing token path after trusted publishing is configured", () => {
+    expect(sourceHits(["NPM_BOOTSTRAP_TOKEN"])).toEqual([]);
+  });
+
   it("deletes pre-launch compatibility aliases and stale internal names", () => {
     const markers = [
       ["bar", "Values"].join(""),
