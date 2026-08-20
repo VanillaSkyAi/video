@@ -234,7 +234,7 @@ jobs:
           fi
           test "$current_remote" = "$REMOTE_SHA"
           test "$(git -C "$PUBLISH_REPOSITORY" rev-parse HEAD)" = "$GENERATED_HEAD_SHA"
-          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64)"
+          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
           git -C "$PUBLISH_REPOSITORY" \
             -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" push origin \
             --force-with-lease=refs/heads/changeset-release/main:"$REMOTE_SHA" \
