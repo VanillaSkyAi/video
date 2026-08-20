@@ -256,6 +256,67 @@ describe("Version Packages workflow", () => {
     expect(result.status).not.toBe(0);
   });
 
+  it("pushes with one exact Basic auth header when a GNU-style encoder wraps a long token", () => {
+    const fixture = createHandoffFixture();
+    const validation = runValidation(fixture);
+    expect(validation.result.status, validation.result.stderr).toBe(0);
+    const outputs = Object.fromEntries(readFileSync(validation.githubOutput, "utf8").trim().split("\n").map((line) => line.split("=", 2)));
+    const tools = join(fixture.runnerTemp, "tools");
+    const authCapture = join(fixture.runnerTemp, "auth-header");
+    mkdirSync(tools);
+    writeFileSync(join(tools, "base64"), [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      '"$REAL_BASE64" "$@" | fold -w 76',
+      "",
+    ].join("\n"));
+    writeFileSync(join(tools, "git"), [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      'for arg in "$@"; do',
+      '  case "$arg" in',
+      '    "http.https://github.com/.extraheader=AUTHORIZATION: basic "*)',
+      '      encoded="${arg#*=AUTHORIZATION: basic }"',
+      '      printf "%s" "$encoded" > "$AUTH_CAPTURE"',
+      "      if [[ \"$encoded\" == *$'\\n'* ]]; then",
+      '        echo "wrapped authorization header" >&2',
+      "        exit 91",
+      "      fi",
+      "      ;;",
+      "  esac",
+      "done",
+      'exec "$REAL_GIT" "$@"',
+      "",
+    ].join("\n"));
+    chmodSync(join(tools, "base64"), 0o755);
+    chmodSync(join(tools, "git"), 0o755);
+
+    const token = `ghs_${"a".repeat(180)}`;
+    const pushScript = extractRunStep("Push exact dedicated branch").replace("${{ github.sha }}", fixture.baseSha);
+    const result = spawnSync("bash", ["-c", pushScript], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        AUTH_CAPTURE: authCapture,
+        GENERATED_HEAD_SHA: outputs.head_sha,
+        GITHUB_STEP_SUMMARY: join(fixture.runnerTemp, "summary"),
+        GITHUB_TOKEN: token,
+        PATH: `${tools}:${process.env.PATH}`,
+        PUBLISH_REPOSITORY: outputs.repository,
+        REAL_BASE64: execFileSync("which", ["base64"], { encoding: "utf8" }).trim(),
+        REAL_GIT: execFileSync("which", ["git"], { encoding: "utf8" }).trim(),
+        REMOTE_SHA: outputs.remote_sha,
+      },
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    const encodedAuth = readFileSync(authCapture, "utf8");
+    expect(encodedAuth).not.toContain("\n");
+    expect(Buffer.from(encodedAuth, "base64").toString("utf8")).toBe(`x-access-token:${token}`);
+    expect(git(fixture.remote, "rev-parse", "refs/heads/changeset-release/main")).toBe(outputs.head_sha);
+  });
+
   it("publishes a direct compare URL without opening or merging a PR", () => {
     const workflow = readFileSync(workflowPath, "utf8");
 
