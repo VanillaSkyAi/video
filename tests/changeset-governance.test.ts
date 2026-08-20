@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -24,7 +24,7 @@ function commit(root: string, message: string): void {
   git(root, "-c", "commit.gpgsign=false", "commit", "-m", message);
 }
 
-function createRepository({ pendingChangeset = false } = {}): { baseRef: string; root: string } {
+function createRepository({ pendingChangeset = false, prereleaseEvidence = false } = {}): { baseRef: string; root: string } {
   const root = mkdtempSync(join(tmpdir(), "vanillasky-changeset-governance-"));
   fixtures.push(root);
   git(root, "init", "--initial-branch=main");
@@ -38,6 +38,10 @@ function createRepository({ pendingChangeset = false } = {}): { baseRef: string;
   write(root, "src/index.ts", "export const version = 1;\n");
   write(root, "CONTRIBUTING.md", "# Contributing\n");
   if (pendingChangeset) write(root, ".changeset/prior-change.md", packageChangeset);
+  if (prereleaseEvidence) {
+    write(root, ".changeset/pre.json", '{\n  "mode": "pre",\n  "tag": "beta"\n}\n');
+    write(root, ".changeset/pre/prior-change.md", packageChangeset);
+  }
   commit(root, "initial fixture");
   const baseRef = git(root, "rev-parse", "HEAD");
   git(root, "checkout", "-b", "feature/test");
@@ -231,6 +235,96 @@ describe("changeset governance", () => {
     );
   });
 
+  it.each([
+    {
+      action: "modified",
+      mutate(root: string) {
+        write(root, ".changeset/pre/prior-change.md", packageChangeset.replace("next patch", "forged patch"));
+      },
+    },
+    {
+      action: "deleted",
+      mutate(root: string) {
+        rmSync(join(root, ".changeset/pre/prior-change.md"));
+      },
+    },
+    {
+      action: "renamed",
+      mutate(root: string) {
+        git(root, "mv", ".changeset/pre/prior-change.md", ".changeset/pre/renamed.md");
+      },
+    },
+    {
+      action: "type-changed",
+      mutate(root: string) {
+        rmSync(join(root, ".changeset/pre/prior-change.md"));
+        symlinkSync("../../release-intent.md", join(root, ".changeset/pre/prior-change.md"));
+      },
+    },
+  ])("rejects prerelease evidence that is $action on an ordinary branch", ({ action, mutate }) => {
+    const { baseRef, root } = createRepository({ prereleaseEvidence: true });
+    write(root, "release-intent.md", packageChangeset);
+    mutate(root);
+    write(root, ".changeset/quiet-tools.md", emptyChangeset);
+    commit(root, `${action} prerelease evidence`);
+
+    expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(/prerelease.*immutable|generated branch/i);
+  });
+
+  it("rejects adding generated prerelease evidence on an ordinary branch", () => {
+    const { baseRef, root } = createRepository();
+    write(root, ".changeset/pre/forged.md", packageChangeset);
+    write(root, ".changeset/quiet-tools.md", emptyChangeset);
+    commit(root, "forge generated prerelease evidence");
+
+    expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(/prerelease.*generated branch/i);
+  });
+
+  it.each([
+    {
+      action: "modified",
+      mutate(root: string) {
+        write(root, ".changeset/pre.json", '{\n  "mode": "pre",\n  "tag": "next"\n}\n');
+      },
+    },
+    {
+      action: "deleted",
+      mutate(root: string) {
+        rmSync(join(root, ".changeset/pre.json"));
+      },
+    },
+    {
+      action: "renamed",
+      mutate(root: string) {
+        git(root, "mv", ".changeset/pre.json", ".changeset/renamed-pre.json");
+      },
+    },
+    {
+      action: "type-changed",
+      mutate(root: string) {
+        rmSync(join(root, ".changeset/pre.json"));
+        symlinkSync("../release-intent.md", join(root, ".changeset/pre.json"));
+      },
+    },
+  ])("rejects prerelease mode that is $action on an ordinary branch", ({ action, mutate }) => {
+    const { baseRef, root } = createRepository({ prereleaseEvidence: true });
+    write(root, "release-intent.md", packageChangeset);
+    mutate(root);
+    write(root, ".changeset/quiet-tools.md", emptyChangeset);
+    commit(root, `${action} prerelease mode`);
+
+    expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(/prerelease mode.*immutable|generated branch/i);
+  });
+
+  it("allows the exact regular 100644 beta prerelease-state bootstrap", () => {
+    const { baseRef, root } = createRepository();
+    write(root, ".changeset/pre.json", '{\n  "mode": "pre",\n  "tag": "beta"\n}\n');
+    write(root, ".changeset/quiet-tools.md", emptyChangeset);
+    commit(root, "enter beta prerelease mode");
+
+    expect(verifyChangesetGovernance({ root, baseRef })).toMatchObject({ releaseType: null });
+  });
+
   it("rejects duplicate package keys using the official Changesets parser", () => {
     const { baseRef, root } = createRepository();
     write(root, "src/index.ts", "export const version = 2;\n");
@@ -260,6 +354,27 @@ Reject an unsupported release type.
     expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(/invalid version type/i);
   });
 
+  it("rejects a newly added Changeset symlink instead of following it", () => {
+    const { baseRef, root } = createRepository();
+    write(root, "src/index.ts", "export const version = 2;\n");
+    write(root, "release-intent.md", packageChangeset);
+    mkdirSync(join(root, ".changeset"), { recursive: true });
+    symlinkSync("../release-intent.md", join(root, ".changeset/linked-release.md"));
+    commit(root, "add linked release intent");
+
+    expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(/100644|regular file|symlink/i);
+  });
+
+  it("rejects an executable Changeset record", () => {
+    const { baseRef, root } = createRepository();
+    write(root, "src/index.ts", "export const version = 2;\n");
+    write(root, ".changeset/executable-release.md", packageChangeset);
+    chmodSync(join(root, ".changeset/executable-release.md"), 0o755);
+    commit(root, "add executable release intent");
+
+    expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(/100644|regular file/i);
+  });
+
   it.each([
     {
       name: "a heading instead of a one-line summary",
@@ -285,19 +400,19 @@ ${body}
     expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(error);
   });
 
-  it("does not exempt a Version Packages branch before generator provenance exists", () => {
+  it("does not exempt a Version Packages branch before the generated shape exists", () => {
     const { baseRef, root } = createRepository();
     write(root, "src/index.ts", "export const version = 2;\n");
     commit(root, "consume pending changesets");
 
-    const provenanceClaim = {
+    const generatedBranchClaim = {
       root,
       baseRef,
       headBranch: "changeset-release/main",
       headRepository: canonicalRepository,
       baseRepository: canonicalRepository,
     };
-    expect(() => verifyChangesetGovernance(provenanceClaim)).toThrow(/new changeset/i);
+    expect(() => verifyChangesetGovernance(generatedBranchClaim)).toThrow(/new changeset/i);
   });
 
   it.each([
@@ -314,8 +429,8 @@ ${body}
     write(root, "src/index.ts", "export const version = 2;\n");
     commit(root, "spoof a generated release branch");
 
-    const provenanceClaim = { root, baseRef, headBranch };
-    expect(() => verifyChangesetGovernance(provenanceClaim)).toThrow(/new changeset/i);
+    const generatedBranchClaim = { root, baseRef, headBranch };
+    expect(() => verifyChangesetGovernance(generatedBranchClaim)).toThrow(/new changeset/i);
   });
 
   it("pins Changesets and runs governance for every ordinary pull request", () => {
@@ -331,9 +446,50 @@ ${body}
     expect(existsSync(configPath)).toBe(true);
     expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain("CHANGESET_BASE_REF: ${{ github.event.pull_request.base.sha }}");
-    expect(workflow).not.toContain("CHANGESET_HEAD_BRANCH");
-    expect(workflow).not.toContain("CHANGESET_BASE_REPOSITORY");
-    expect(workflow).not.toContain("CHANGESET_HEAD_REPOSITORY");
+    expect(workflow).toContain("CHANGESET_HEAD_BRANCH: ${{ github.head_ref }}");
+    expect(workflow).toContain("CHANGESET_BASE_BRANCH: ${{ github.base_ref }}");
+    expect(workflow).toContain("CHANGESET_BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}");
+    expect(workflow).toContain("CHANGESET_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}");
+    expect(workflow).toContain("scripts/verify-version-packages-pr.mjs");
+    expect(workflow).toContain("changeset-release/main");
+    expect(workflow).toContain("  pr-safety:");
+    expect(workflow).toContain('(cd "$base_verifier" && npm ci --ignore-scripts)');
+    expect(workflow).not.toContain('npm --prefix "$base_verifier" ci');
+    expect(workflow).toContain('CHANGESETS_CLI_PATH="$base_verifier/node_modules/@changesets/cli/bin.js"');
+    expect(workflow).toContain('CHANGESETS_PARSE_PATH="$base_verifier/node_modules/@changesets/parse/dist/index.mjs"');
+    const safetyJob = workflow.slice(workflow.indexOf("  pr-safety:"), workflow.indexOf("  verify:"));
+    const generatedRoute = safetyJob.slice(safetyJob.indexOf('if [[ "$CHANGESET_HEAD_BRANCH" == "changeset-release/main"'));
+    expect(generatedRoute).not.toContain('CHANGESETS_CLI_PATH="$GITHUB_WORKSPACE/node_modules');
+    expect(generatedRoute).not.toContain("npm run");
+    expect(safetyJob.indexOf('(cd "$base_verifier" && npm ci --ignore-scripts)'))
+      .toBeLessThan(safetyJob.indexOf('node "$base_verifier/scripts/verify-version-packages-pr.mjs"'));
+    expect(safetyJob).not.toMatch(/^\s+- run: npm ci$/m);
+    for (const job of [
+      "verify",
+      "consumer-compatibility",
+      "provider-compatibility",
+      "node-compatibility",
+      "react-compatibility",
+      "browser-compatibility",
+    ]) {
+      expect(workflow, job).toMatch(new RegExp(`  ${job}:\\n\\s+needs: pr-safety`));
+    }
+    const headInstall = workflow.indexOf("      - run: npm ci", workflow.indexOf("  verify:"));
+    expect(headInstall).toBeGreaterThan(workflow.indexOf("  pr-safety:"));
+    const verifyJob = workflow.slice(workflow.indexOf("  verify:"), workflow.indexOf("  consumer-compatibility:"));
+    expect(verifyJob).toContain("if: ${{ always() }}");
+    expect(verifyJob).toContain('test "${{ needs.pr-safety.result }}" = "success"');
+    expect(verifyJob.indexOf("needs.pr-safety.result")).toBeLessThan(verifyJob.indexOf("actions/checkout@"));
+    expect(verifyJob).toContain("node-version: 22");
+    expect(verifyJob).toMatch(/^\s+- run: npm test$/m);
+    const nodeCompatibilityJob = workflow.slice(
+      workflow.indexOf("  node-compatibility:"),
+      workflow.indexOf("  react-compatibility:"),
+    );
+    expect(nodeCompatibilityJob).toContain("node: [20, 24]");
+    expect(nodeCompatibilityJob).toMatch(/^\s+- run: npm test$/m);
+    expect(nodeCompatibilityJob).toMatch(/^\s+- run: npm run build$/m);
+    expect(nodeCompatibilityJob).not.toMatch(/exclude.*version-packages|version-packages.*exclude/i);
     const officialStatusCommand = 'npm run changeset:status -- --since "$CHANGESET_BASE_REF"';
     expect(workflow).toContain(officialStatusCommand);
     expect(workflow.indexOf(officialStatusCommand)).toBeLessThan(workflow.indexOf("npm run changeset:check"));

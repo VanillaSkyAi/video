@@ -28,6 +28,9 @@ export function assertReleasePreflight(input) {
   if (String(input.status ?? "").trim()) {
     throw new Error("Release working tree must be clean");
   }
+  if ((input.pendingChangesets ?? []).length > 0) {
+    throw new Error(`Release is blocked while pending Changesets exist: ${input.pendingChangesets.join(", ")}`);
+  }
   if (input.localTagExists) {
     throw new Error(`Release local tag v${version} must be absent before tag creation`);
   }

@@ -1,23 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { assertValidSemver, compareSemver } from "./release-integrity.mjs";
-
-const TEXT_VERSION_SURFACES = [
-  "README.md",
-  "PUBLIC-API.md",
-  "docs/getting-started.md",
-  "docs/integrate-nextjs.md",
-  "skills/vanillasky/SKILL.md",
-];
-
-const DEPENDENCY_MANIFESTS = [
-  "examples/react-vite/package.json",
-  "examples/server-integrations/package.json",
-  "examples/nextjs-quickstart/package.json",
-  "tests/fixtures/nextjs-provider-app/package.json",
-];
-
-const UNRELEASED_PLACEHOLDER = "<!-- Add release notes here before running release:prepare. -->";
+import { synchronizeVersionSurfaces, UNRELEASED_PLACEHOLDER } from "./version-surfaces.mjs";
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -55,9 +39,7 @@ export function prepareRelease({ root, targetVersion }) {
   assertValidSemver(targetVersion);
 
   const packagePath = join(repositoryRoot, "package.json");
-  const packageLockPath = join(repositoryRoot, "package-lock.json");
   const manifest = readJson(packagePath);
-  const packageLock = readJson(packageLockPath);
   const currentVersion = manifest.version;
   assertValidSemver(currentVersion);
   if (targetVersion !== currentVersion && compareSemver(targetVersion, currentVersion) <= 0) {
@@ -65,27 +47,7 @@ export function prepareRelease({ root, targetVersion }) {
   }
 
   manifest.version = targetVersion;
-  packageLock.version = targetVersion;
-  if (packageLock.packages?.[""]) packageLock.packages[""].version = targetVersion;
-
-  const updates = new Map([
-    [packagePath, formatJson(manifest)],
-    [packageLockPath, formatJson(packageLock)],
-  ]);
-  for (const relativePath of TEXT_VERSION_SURFACES) {
-    const path = join(repositoryRoot, relativePath);
-    const source = readFileSync(path, "utf8");
-    if (!source.includes(currentVersion)) {
-      throw new Error(`${relativePath} does not contain current version ${currentVersion}`);
-    }
-    updates.set(path, source.replaceAll(currentVersion, targetVersion));
-  }
-  for (const relativePath of DEPENDENCY_MANIFESTS) {
-    const path = join(repositoryRoot, relativePath);
-    const dependencyManifest = readJson(path);
-    dependencyManifest.dependencies[manifest.name] = targetVersion;
-    updates.set(path, formatJson(dependencyManifest));
-  }
+  const updates = new Map([[packagePath, formatJson(manifest)]]);
   const changelogPath = join(repositoryRoot, "CHANGELOG.md");
   updates.set(
     changelogPath,
@@ -94,6 +56,12 @@ export function prepareRelease({ root, targetVersion }) {
       : promoteUnreleased(readFileSync(changelogPath, "utf8"), targetVersion),
   );
 
+  synchronizeVersionSurfaces({
+    root: repositoryRoot,
+    packageName: manifest.name,
+    previousVersion: currentVersion,
+    version: targetVersion,
+  });
   for (const [path, contents] of updates) writeFileSync(path, contents);
   return { previousVersion: currentVersion, version: targetVersion };
 }

@@ -6,6 +6,7 @@ export interface ReleasePreflightInput {
   originMain: string;
   packageName: string;
   packageRepository: string;
+  pendingChangesets: string[];
   remoteTagExists: boolean;
   remoteUrl: string;
   status: string;

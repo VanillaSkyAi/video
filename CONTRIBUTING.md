@@ -41,9 +41,10 @@ npm run changeset
 
 Select `@vanillaskyai/video` and choose `patch`, `minor`, or `major`. Use
 `npm run changeset -- --empty` for repository-only tooling, tests, workflows,
-maintainer documentation, or governance. No branch is currently exempt. A
-future Version Packages generator must introduce its exemption together with
-canonical repository, exact branch, and GitHub Actions bot provenance checks.
+maintainer documentation, or governance. The generated
+`changeset-release/main` branch is the sole exception. CI accepts it only from
+the canonical repository into `main`, with the deterministic generated-commit
+identity and shape plus a byte-reproducible tree generated from the exact PR base.
 Start each Changeset body with a one-line summary; put details and any migration
 headings after a blank line. Before opening a pull request, commit the Changeset
 and run:
@@ -53,9 +54,10 @@ npm run changeset:status
 npm run changeset:check
 ```
 
-Pending Changesets are immutable after merge. The current `release:prepare`
-command does not consume them; they must be consumed by the Version Packages
-lifecycle pull request before the next release.
+Pending Changesets are immutable after merge. The Version Packages workflow
+consumes them on a dedicated beta candidate branch; contributors and ordinary
+pull requests never edit or remove them. That immutability also covers the beta
+mode in `.changeset/pre.json` and generated `.changeset/pre/*.md` evidence.
 
 ## Maintainer guides
 
@@ -66,7 +68,14 @@ lifecycle pull request before the next release.
 
 ## Release checks
 
-CI verifies Node 20 and 22, React 18 and 19, and Chromium, Firefox, and WebKit.
+The published SDK supports Node 20 and newer. CI runs the full SDK/runtime test
+suite and build on Node 20, 22, and 24. The pinned `@changesets/cli@3.0.1`
+release tool itself supports `^22.11 || ^24 || >=26`, so only tests that spawn
+that CLI are skipped on Node 20. The required Node 22 `verify` job always runs
+those real-CLI integration tests; the Node 20 job does not omit any SDK/runtime
+test file.
+
+CI also verifies React 18 and 19, and Chromium, Firefox, and WebKit.
 Before a release candidate, run both provider harnesses in a server-only
 environment and review the rendered artifacts using the [acceptance guide](docs/maintainers/acceptance.md).
 Replay passing is necessary but is not evidence of live-provider latency or

@@ -9,6 +9,7 @@ const valid = {
   originMain: "a".repeat(40),
   packageName: "@vanillaskyai/video",
   packageRepository: "git+https://github.com/VanillaSkyAi/video.git",
+  pendingChangesets: [],
   remoteTagExists: false,
   remoteUrl: "git@github.com:VanillaSkyAi/video.git",
   status: "",
@@ -33,6 +34,7 @@ describe("release preflight", () => {
     ["invalid version", { version: "next" }, /version/i],
     ["local existing tag", { localTagExists: true }, /local tag/i],
     ["remote existing tag", { remoteTagExists: true }, /remote tag/i],
+    ["pending Changesets", { pendingChangesets: [".changeset/pending-release.md"] }, /pending changeset/i],
   ])("rejects %s", (_name, change, expected) => {
     expect(() => assertReleasePreflight({ ...valid, ...change })).toThrow(expected);
   });

@@ -194,7 +194,7 @@ describe("release workflow", () => {
   it("pins every CI action to the reviewed v7 commit", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
     const actions = [...workflow.matchAll(/uses:\s+(actions\/(?:checkout|setup-node))@([^\s]+)/g)];
-    expect(actions).toHaveLength(12);
+    expect(actions).toHaveLength(14);
     for (const [, action, revision] of actions) {
       expect(revision, action).toMatch(/^[a-f0-9]{40}$/);
     }
@@ -219,7 +219,7 @@ describe("release workflow", () => {
     expect(browserJob).not.toContain("playwright install");
     expect(workflow.match(/npx playwright test(?:\s|$)/g)).toHaveLength(1);
     expect(workflow).not.toContain("matrix.browser");
-    expect(workflow.match(/timeout-minutes:/g)).toHaveLength(6);
+    expect(workflow.match(/timeout-minutes:/g)).toHaveLength(7);
   });
 
   it("enforces the live npm-latest public API comparison in pull-request CI", () => {

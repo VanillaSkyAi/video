@@ -26,6 +26,30 @@ describe("local release dry run", () => {
       .toBeLessThan(orchestrator.indexOf("const temporaryRoot = mkdtempSync"));
   });
 
+  it("technically blocks both release entry points while pending Changesets exist", () => {
+    const dryRun = readFileSync(resolve(root, "scripts", "release-dry-run.mjs"), "utf8");
+    const preflight = readFileSync(resolve(root, "scripts", "release-preflight.mjs"), "utf8");
+
+    expect(dryRun).toContain("assertNoPendingChangesets");
+    expect(preflight).toContain("listPendingChangesetPaths");
+    expect(dryRun.indexOf("assertNoPendingChangesets"))
+      .toBeLessThan(dryRun.indexOf("const temporaryRoot = mkdtempSync"));
+  });
+
+  it("retires tag-mode publishing until the main-only release workflow replaces it", () => {
+    const dryRun = readFileSync(resolve(root, "scripts", "release-dry-run.mjs"), "utf8");
+    const workflow = readFileSync(resolve(root, ".github", "workflows", "release.yml"), "utf8");
+    const retirementGuard = dryRun.indexOf("Tag-triggered publishing is temporarily disabled");
+    const verifyJob = workflow.slice(workflow.indexOf("  verify:"), workflow.indexOf("  publish-npm:"));
+    const publishJob = workflow.slice(workflow.indexOf("  publish-npm:"), workflow.indexOf("  verify-published:"));
+
+    expect(retirementGuard).toBeGreaterThan(-1);
+    expect(retirementGuard).toBeLessThan(dryRun.indexOf("const temporaryRoot = mkdtempSync"));
+    expect(verifyJob).toContain("VANILLASKY_RELEASE_MODE: tag");
+    expect(verifyJob).toContain("npm run release:dry-run -- --ci");
+    expect(publishJob).toMatch(/publish-npm:\n\s+needs: verify/);
+  });
+
   it("creates the npm execution guard inside temporary-workspace cleanup protection", () => {
     const orchestrator = readFileSync(resolve(root, "scripts", "release-dry-run.mjs"), "utf8");
 

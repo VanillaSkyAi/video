@@ -25,20 +25,25 @@ import {
 } from "./lib/release-integrity.mjs";
 import { createReleaseNpmGuard } from "./lib/release-npm-guard.mjs";
 import { assertReleaseToolchain } from "./lib/release-toolchain.mjs";
+import { assertNoPendingChangesets } from "./lib/changeset-records.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const expectedRepository = "VanillaSkyAi/video";
 const expectedPackage = "@vanillaskyai/video";
 const expectedNpm = "11.17.0";
+const ciMode = process.argv.includes("--ci");
+const manifestOnly = process.argv.includes("--manifest-only");
 assertReleaseToolchain({
   nodeVersion: process.versions.node,
   npmVersion: execFileSync("npm", ["--version"], { encoding: "utf8" }).trim(),
 });
+assertNoPendingChangesets({ root });
+if (ciMode && process.env.VANILLASKY_RELEASE_MODE === "tag") {
+  throw new Error("Tag-triggered publishing is temporarily disabled until the main-only release workflow replaces it");
+}
 const temporaryRoot = mkdtempSync(join(tmpdir(), "vanillasky-release-dry-run-"));
 const requestedOutput = process.env.VANILLASKY_RELEASE_OUTPUT_DIR;
 const outputDirectory = requestedOutput ? resolve(requestedOutput) : join(temporaryRoot, "release-assets");
-const ciMode = process.argv.includes("--ci");
-const manifestOnly = process.argv.includes("--manifest-only");
 const consumerResults = {};
 let releaseNpmGuard;
 
