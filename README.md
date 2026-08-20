@@ -109,7 +109,7 @@ A copy-and-run app is in
 
 ## Shape the response
 
-Start with `input`, the complete factual boundary for the video:
+Start with `input`. It is the complete factual boundary by default:
 
 ```ts
 video.generate({
@@ -124,6 +124,9 @@ video.generate({
 ```
 
 - Put claims, numbers, names, dates, and quotations in `input`.
+- Keep `knowledgeMode: "input-only"` (the default) for source-grounded video,
+  or choose `knowledgeMode: "general"` when the model should answer a question
+  or develop content with stable general knowledge.
 - Put presentation direction in `instructions`.
 - Put viewer or account context in `personalization`.
 - Add brand, approved media, soundtrack audio, or a smaller template set only

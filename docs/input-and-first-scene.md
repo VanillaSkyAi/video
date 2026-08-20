@@ -9,6 +9,7 @@ import type { VideoInput } from "@vanillaskyai/video";
 
 const input: VideoInput = {
   input: "Joris completed 142 customer conversations in Q2.",
+  knowledgeMode: "input-only",
   instructions: "Celebrate the result. Never alter a metric.",
   opening: "Joris, your Q2 recap is ready.",
   personalization: { firstName: "Joris", period: "Q2" },
@@ -22,7 +23,12 @@ const input: VideoInput = {
 
 ## Raw source
 
-Put every fact the response may claim in `input`. Use plain text, compact JSON, or a server-produced digest. Include units, periods, comparison bases, and provenance identifiers where ambiguity is possible. Keep creative direction in `instructions`; it may change emphasis and tone but cannot expand the factual boundary.
+In the default `input-only` mode, put every fact the response may claim in
+`input`. Use plain text, compact JSON, or a server-produced digest. Include
+units, periods, comparison bases, and provenance identifiers where ambiguity
+is possible. Choose `knowledgeMode: "general"` only when the model should use
+stable general knowledge to answer a question or develop content. Creative
+direction in `instructions` never changes that setting.
 
 Bound request bytes and reject secret-shaped fields on the server. Do not pass provider keys, authorization headers, internal prompt fragments, or storage credentials as source material.
 

@@ -40,16 +40,17 @@ video.generate({
 ```
 
 Instructions can influence selection, emphasis, ordering, tone, and pacing.
-They never expand the factual boundary, authorize a new media URL, or weaken
-the event and validation contract.
+They never change `knowledgeMode`, authorize a new media URL, or weaken the
+event and validation contract.
 
 For durable product-wide direction, use the server handler's `basePrompt`.
 Keep per-request creative direction in `instructions`.
 
-### 3. Grounded input
+### 3. Input and knowledge mode
 
-`input` is required and is the complete factual source for the video. It may be
-plain text or a serialized structured object:
+`input` is required. With the default `knowledgeMode: "input-only"`, it is the
+complete factual source for the video. It may be plain text or a serialized
+structured object:
 
 ```ts
 video.generate({
@@ -70,6 +71,20 @@ video.generate({
 Include exact numbers, quote wording, attribution, names, dates, and product
 facts that may appear on screen. Do not place secrets, provider keys, or hidden
 policy in input.
+
+For a chat question or a request to develop content, opt in explicitly:
+
+```ts
+video.generate({
+  input: "How can a small team improve customer onboarding?",
+  knowledgeMode: "general",
+});
+```
+
+General mode permits stable model knowledge. The generated system prompt still
+forbids invented citations, quotations, URLs, personal details, live facts,
+guarantees, and precise claims that require a source. Claims already present in
+`input` remain authoritative.
 
 `personalization`, `brand`, and `suppliedMedia` are separate structured context.
 They do not replace the source material.

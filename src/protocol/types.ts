@@ -2,6 +2,7 @@ export const VIDEO_PROTOCOL_VERSION = "0.4" as const;
 export const VIDEO_SCHEMA_VERSION = "0.1" as const;
 
 export type VideoOrientation = "portrait" | "landscape";
+export type VideoKnowledgeMode = "input-only" | "general";
 
 export interface VideoBrandColors {
   primary: string;
@@ -137,9 +138,11 @@ export interface VideoSuppliedMedia {
 }
 
 export interface VideoInput {
-  /** Raw factual boundary: news, product updates, metrics, or an assistant answer. */
+  /** Raw source, request, or question for the video. */
   input: string;
-  /** Optional creative direction. It never expands the factual boundary. */
+  /** Keep claims source-grounded by default, or allow stable model knowledge. */
+  knowledgeMode?: VideoKnowledgeMode;
+  /** Optional creative direction. It never changes the knowledge mode. */
   instructions?: string;
   maxDurationSec?: number;
   orientation?: VideoOrientation;

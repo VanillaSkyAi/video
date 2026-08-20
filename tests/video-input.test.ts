@@ -441,11 +441,16 @@ describe("VideoInput", () => {
     } = await import("../src/internal");
     const valid = createVideoRequest({
       input: "Grounded source.",
+      knowledgeMode: "general",
       opening: "A grounded opening.",
       audio: { src: "https://cdn.example.com/audio.mp3" },
     }, { requestId: "request-1" });
 
     expect(parseVideoRequest(valid)).toEqual(valid);
+    expect(() => parseVideoRequest({
+      ...valid,
+      input: { input: "Grounded source.", knowledgeMode: "outside-web" },
+    })).toThrow("request.input.knowledgeMode must be input-only or general");
     expect(() => parseVideoRequest({
       ...valid,
       input: { input: "Grounded source.", firstScene: { text: "Old shape" } },
@@ -544,6 +549,7 @@ describe("VideoInput", () => {
   });
 
   it("has the small intent-level type surface", () => {
+    expectTypeOf<VideoInput["knowledgeMode"]>().toEqualTypeOf<"input-only" | "general" | undefined>();
     expectTypeOf<VideoInput["opening"]>().toEqualTypeOf<string | undefined>();
     expectTypeOf<VideoInput["audio"]>().toEqualTypeOf<false | { src: string } | undefined>();
     expectTypeOf<VideoBackground>().toEqualTypeOf<

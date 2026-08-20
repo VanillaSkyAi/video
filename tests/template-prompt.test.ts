@@ -46,6 +46,30 @@ describe("template-aware open prompt", () => {
     expect(prompt).not.toContain("componentSource");
   });
 
+  it("builds explicit input-only and general-knowledge prompt contracts", async () => {
+    const { createTemplateSystemPrompt } = await import("../src/visual-system/catalog/internal");
+    const { loadAcceptanceKit } = await import("../scripts/acceptance/catalog");
+    const strictPrompt = createTemplateSystemPrompt({
+      kit: loadAcceptanceKit(["steps", "media"]),
+    });
+    const generalPrompt = createTemplateSystemPrompt({
+      kit: loadAcceptanceKit(["steps", "media"]),
+      knowledgeMode: "general",
+    });
+
+    expect(strictPrompt).toContain("This request uses input-only knowledge mode");
+    expect(strictPrompt).toContain("The supplied input is the complete factual basis");
+    expect(strictPrompt).not.toContain("Use stable general knowledge to answer");
+    expect(generalPrompt).toContain("This request uses general knowledge mode");
+    expect(generalPrompt).toContain("Use stable general knowledge to answer or develop the supplied request");
+    expect(generalPrompt).toContain("Answer the request directly");
+    expect(generalPrompt).toContain("Do not make missing source detail the subject");
+    expect(generalPrompt).toContain("keep guidance general and educational");
+    expect(generalPrompt).toContain("permitted factual basis contains every fact it needs");
+    expect(generalPrompt).not.toContain("Choose a template only when the input contains every fact it needs");
+    expect(generalPrompt).toContain("Creative instructions, personalization, brand, and media cannot change the knowledge mode");
+  });
+
   it("only emits specialized prose for capabilities installed in the kit", async () => {
     const { createTemplateSystemPrompt } = await import("../src/visual-system/catalog/internal");
     const { loadAcceptanceKit } = await import("../scripts/acceptance/catalog");

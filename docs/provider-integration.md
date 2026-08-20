@@ -153,5 +153,6 @@ same explicit request budget.
 `createVideoHandler` constructs the planner prompt from the generated server
 template registry. Normal integrations do not build prompts or capabilities.
 Use the handler's `basePrompt` option only for durable product-level direction.
-Grounded facts still come from `VideoInput.input`; presentation guidance must
-never override that factual boundary.
+`VideoInput.knowledgeMode` owns the knowledge boundary: `input-only` is strict
+and remains the default, while `general` permits stable model knowledge.
+Presentation guidance in `basePrompt` or `instructions` never changes it.

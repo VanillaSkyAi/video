@@ -1,4 +1,5 @@
-import { DEFAULT_VIDEO_SYSTEM_PROMPT } from "../../server/prompts/system-prompt.js";
+import { createVideoSystemPrompt } from "../../server/prompts/system-prompt.js";
+import type { VideoKnowledgeMode } from "../../protocol/types.js";
 import type {
   SceneTemplateMetadata,
   TemplateMetadataCatalog,
@@ -108,6 +109,7 @@ function plannerCatalog(templates: SceneTemplateMetadata[], mediaResolverAvailab
 export function createTemplateSystemPrompt(options: {
   kit: TemplateMetadataCatalog;
   basePrompt?: string;
+  knowledgeMode?: VideoKnowledgeMode;
   /** Expose host-resolved semantic media intent without exposing a provider. */
   mediaResolverAvailable?: boolean;
 }): string {
@@ -116,7 +118,7 @@ export function createTemplateSystemPrompt(options: {
     templates.some(({ schema }) => getStandardMediaResolverContract(schema) != null);
   const ids = new Set(templates.map(({ id }) => id));
   const fields = new Set(templates.flatMap(({ schema }) => Object.keys(schema.properties)));
-  const basePrompt = DEFAULT_VIDEO_SYSTEM_PROMPT
+  const basePrompt = createVideoSystemPrompt(options.knowledgeMode)
     .split("\n")
     .filter((line) =>
       !line.includes("Never use media, ctaMedia, or reaction as the first generated body template") &&
@@ -150,7 +152,7 @@ export function createTemplateSystemPrompt(options: {
     "Only use template IDs from this catalog. Only emit variables declared for the selected template.",
     "Variable notation is type[count]{characters}(options)! where count is list cardinality, characters is the inclusive character count for a string or each string-array item, and ! means required. Omitted ! means optional.",
     `seconds is [minimum, preferred]. media=true adds these optional variables: ${Object.entries(COMMON_MEDIA_VARIABLES).map(([name, notation]) => `${name}:${notation}`).join(", ")}.`,
-    "Choose a template only when the input contains every fact it needs. Never invent peer values to complete a chart, comparison, stat set, timeline, or list.",
+    "Choose a template only when the permitted factual basis contains every fact it needs. Never invent peer values to complete a chart, comparison, stat set, timeline, or list.",
     ...PACING_PLANNER_RULES,
     ids.has("cardList") && ids.has("steps") && ids.has("tripleStats")
       ? "Fact availability carries across templates: cardList and steps each need two or three unused facts (parallel for cardList, sequential for steps) and must carry only the count the evidence supports, and tripleStats needs exactly three unused peer values. Never invent a fact to fill a collection, and do not fill one with facts already shown in another scene."
@@ -177,11 +179,11 @@ export function createTemplateSystemPrompt(options: {
       ? 'For bars, emit an actual JSON array of 2–6 grounded objects with "label" and "value" fields. Use comparable units and avoid a largest-to-smallest positive ratio above 20. Do not encode bars as a string.'
       : undefined,
     resolverMediaAvailable
-      ? "Prefer a relevant resolved image or video background on later media-capable scenes whenever the input names a concrete person, place, product context, activity, or outcome that can be depicted honestly. Emit mediaKeyword on scene.add as a specific 2–8 word semantic query of at most 80 characters; never put mediaKeyword in scene.patch or asset.patch. The host removes mediaKeyword before the scene reaches the browser and replaces it with an approved asset. Use mediaType=gradient for abstract, sensitive, unsafe, or visually ambiguous material. Never emit or invent mediaUrl or mediaPoster."
+      ? "Prefer a relevant resolved image or video background on later media-capable scenes whenever the permitted factual basis names a concrete person, place, product context, activity, or outcome that can be depicted honestly. Emit mediaKeyword on scene.add as a specific 2–8 word semantic query of at most 80 characters; never put mediaKeyword in scene.patch or asset.patch. The host removes mediaKeyword before the scene reaches the browser and replaces it with an approved asset. Use mediaType=gradient for abstract, sensitive, unsafe, or visually ambiguous material. Never emit or invent mediaUrl or mediaPoster."
       : mediaTemplates.length > 0
       ? `Use exact grounded values for required fields. mediaUrl must come verbatim from supplied input. Stock queries are not available. Do not select ${mediaTemplateNames} without a supplied mediaUrl; if another template has no mediaUrl, explicitly use mediaType=gradient. mediaType auto detects a URL, while gradient deliberately uses no external asset.`
       : "Use exact grounded values for required fields.",
-    "Catalog guidance describes composition; it is not a factual source and must never replace customer input.",
+    "Catalog guidance describes composition; it is not a factual source and must never replace the permitted factual basis.",
     JSON.stringify(plannerCatalog(templates, resolverMediaAvailable)),
   ].filter((line): line is string => line != null).join("\n");
 }

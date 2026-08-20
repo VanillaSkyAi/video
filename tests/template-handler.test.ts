@@ -1039,6 +1039,37 @@ describe("createVideoHandler", () => {
     expect(response.status).toBe(200);
   });
 
+  it("selects the trusted knowledge contract from validated VideoInput", async () => {
+    const { createVideoHandler } = await import("../src/server");
+    const prompts: string[] = [];
+    const handler = createVideoHandler({
+      authorize: "none",
+      templates: kit,
+      heartbeatMs: false,
+      streamText: async function* (context) {
+        prompts.push(context.systemPrompt);
+        yield '{"type":"scene.add","scene":{"id":"proof","templateId":"metric","variables":{"value":7},"timing":{"fixedDuration":4}}}\n';
+        yield '{"type":"plan.complete"}\n';
+      },
+    });
+    for (const [requestId, knowledgeMode] of [["strict", undefined], ["general", "general"]] as const) {
+      const response = await handler(new Request("https://app.example/api/motion", {
+        method: "POST",
+        body: JSON.stringify({
+          protocolVersion: "0.4",
+          requestId,
+          input: { input: "Explain the principle.", ...(knowledgeMode ? { knowledgeMode } : {}) },
+        }),
+      }));
+      await response.text();
+    }
+
+    expect(prompts[0]).toContain("input-only knowledge mode");
+    expect(prompts[0]).not.toContain("Use stable general knowledge to answer");
+    expect(prompts[1]).toContain("general knowledge mode");
+    expect(prompts[1]).toContain("Use stable general knowledge to answer");
+  });
+
   it.each([
     ["scene.add", [
       '{"type":"scene.add","scene":{"id":"image-1","templateId":"image","variables":{"imageUrl":"https://evil.example/image.png"},"timing":{"fixedDuration":4}}}\n',

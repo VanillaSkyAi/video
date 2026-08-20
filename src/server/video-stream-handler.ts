@@ -1,5 +1,4 @@
 import { createVideo } from "./compose-video.js";
-import { DEFAULT_VIDEO_SYSTEM_PROMPT } from "./prompts/system-prompt.js";
 import { encodeVideoSseEvent, videoSseHeaders } from "../protocol/sse.js";
 import type { VideoEvent } from "../protocol/events.js";
 import type {
@@ -238,7 +237,7 @@ export function createVideoStreamHandler(options: VideoStreamHandlerOptions): Vi
           onError: options.onError,
           onWarning: options.onWarning,
           onComplete: options.onComplete,
-          systemPrompt: systemPrompt ?? DEFAULT_VIDEO_SYSTEM_PROMPT,
+          systemPrompt,
           selectAudio: options.selectAudio,
           snapshotRetention: options.snapshotRetention,
           signal: request.signal,

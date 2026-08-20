@@ -690,6 +690,20 @@ describe("video response core", () => {
     expect(prompt).toContain("Never use media, ctaMedia, or reaction as the first generated body template");
   });
 
+  it("defers the factual basis to trusted system guidance instead of contradicting chat applications", async () => {
+    const { buildVideoUserPrompt } = await import("../src/internal");
+    const prompt = buildVideoUserPrompt({
+      input: "How do I build long-term wealth?",
+      instructions: "Answer the user directly in at least three scenes.",
+      knowledgeMode: "general",
+    });
+
+    expect(prompt).toContain("Knowledge mode: general");
+    expect(prompt).toContain("Use only claims supported by the factual basis permitted by the trusted system prompt");
+    expect(prompt).not.toContain("The raw input is the complete factual boundary");
+    expect(prompt).toContain("How do I build long-term wealth?");
+  });
+
   it("does not tell the planner to discard facts when the application requests complete coverage", async () => {
     const { buildVideoUserPrompt } = await import("../src/internal");
     const prompt = buildVideoUserPrompt({

@@ -154,6 +154,9 @@ function buildInitialConfig(
 
 function validateInput(input: VideoInput): void {
   if (!input.input.trim()) throw new Error("Video response input is required");
+  if (input.knowledgeMode != null && input.knowledgeMode !== "input-only" && input.knowledgeMode !== "general") {
+    throw new Error("Video response knowledge mode must be input-only or general");
+  }
   if (input.maxDurationSec != null &&
     (!Number.isFinite(input.maxDurationSec) || input.maxDurationSec < 5 || input.maxDurationSec > 120)) {
     throw new Error("Video response maximum duration must be between 5 and 120 seconds");
@@ -407,7 +410,7 @@ export function createVideo(
       }
 
       const systemPrompt = options.systemPrompt ??
-        (await import("./prompts/system-prompt.js")).DEFAULT_VIDEO_SYSTEM_PROMPT;
+        (await import("./prompts/system-prompt.js")).createVideoSystemPrompt(input.knowledgeMode);
       const context = { request, systemPrompt, userPrompt, initialConfig, signal: controller.signal };
       attachGenerationLifecycleSink(context, lifecycle);
       for await (const untrustedPart of options.generate(context)) {

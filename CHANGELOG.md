@@ -15,6 +15,9 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
   `Creating your video...` whenever `VideoInput.opening` is omitted, while
   preserving supplied opening copy and keeping body-template selection
   independent from the runtime-owned opening.
+- Adds an explicit `knowledgeMode` input: source-grounded `input-only` remains
+  the default, while `general` lets chat-style video responses use stable model
+  knowledge under bounded safety and factuality rules.
 
 ## 0.2.0
 
