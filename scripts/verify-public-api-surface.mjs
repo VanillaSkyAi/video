@@ -10,6 +10,7 @@ import {
   createPublicApiSignatureReport,
   verifyPublicApiSurface,
 } from "./lib/public-api-surface.mjs";
+import { readCompatibilityReleaseIntent } from "./lib/compatibility-release-intent.mjs";
 import { assertFileHashes } from "./lib/release-integrity.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -102,6 +103,12 @@ try {
       manifestPath: baselineManifestPath,
     }),
     candidateSignatures: createPublicApiSignatureReport({ packageRoot, manifestPath }),
+    releaseIntent: readCompatibilityReleaseIntent({
+      root,
+      packageName,
+      baselineVersion,
+      candidateVersion,
+    }),
   });
   console.log(`Verified public API compatibility against npm latest ${baselineVersion}: ${compatibility.status}.`);
 } finally {
