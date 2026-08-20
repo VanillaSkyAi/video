@@ -6,11 +6,13 @@ import type {
 import type { VideoWarning } from "../protocol/warnings.js";
 
 export const DEFAULT_SCENE_DURATION_SEC = 5;
+export const MINIMUM_OPENING_DURATION_SEC = 3;
 export const MINIMUM_CLOSER_RESERVE_SEC = 3;
 export const PACING_PLANNER_RULES = [
   "Use each template's preferredDuration when no explicit duration is needed, and never request less than minDuration.",
+  `Give the first scene at least ${MINIMUM_OPENING_DURATION_SEC} seconds so the opening has time to register.`,
   "Track the cumulative duration budget before emitting every scene; the runtime omits scenes that cannot remain readable.",
-  `Reserve at least ${MINIMUM_CLOSER_RESERVE_SEC} seconds for a final ask when the catalog includes jobs:[ask], and emit that ask last.`,
+  `Reserve at least ${MINIMUM_CLOSER_RESERVE_SEC} seconds for the final closer when the catalog includes jobs:[ask] or jobs:[payoff].`,
 ] as const;
 
 const WORDS_PER_SECOND = 4.5;
@@ -84,16 +86,16 @@ export function getCloserReserve(
   getTemplatePacing: ((templateId: string) => VideoTemplatePacing | undefined) | undefined,
 ): number {
   if (!templateIds || !getTemplatePacing) return 0;
-  const askDurations = templateIds
+  const closerDurations = templateIds
     .map((id) => getTemplatePacing(id))
-    .filter((metadata) => metadata?.jobs?.includes("ask"))
+    .filter((metadata) => metadata?.jobs?.some((job) => job === "ask" || job === "payoff"))
     .map((metadata) => Math.max(
       metadata?.minDuration ?? MINIMUM_CLOSER_RESERVE_SEC,
       metadata?.preferredDuration ?? 0,
     ));
-  return askDurations.length === 0
+  return closerDurations.length === 0
     ? 0
-    : Math.max(MINIMUM_CLOSER_RESERVE_SEC, ...askDurations);
+    : Math.max(MINIMUM_CLOSER_RESERVE_SEC, ...closerDurations);
 }
 
 function requestedStart(
@@ -151,7 +153,10 @@ export function paceScene(scene: VideoScene, options: PaceSceneOptions): PaceSce
     ? options.maxDurationSec
     : Math.max(0, options.maxDurationSec - options.closerReserveSec);
   const remaining = Math.max(0, ceiling - priorEnd);
-  const readableMinimum = getReadableSceneDuration(scene, metadata);
+  const contentMinimum = getReadableSceneDuration(scene, metadata);
+  const readableMinimum = options.previousScenes.length === 0 && remaining >= MINIMUM_OPENING_DURATION_SEC
+    ? Math.max(contentMinimum, MINIMUM_OPENING_DURATION_SEC)
+    : contentMinimum;
   if (remaining < readableMinimum) {
     const reservedForCloser = !isAsk && options.closerReserveSec > 0 &&
       options.maxDurationSec - priorEnd >= readableMinimum;

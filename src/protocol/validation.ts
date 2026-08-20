@@ -352,7 +352,10 @@ export function parseVideoPlanPart(value: unknown): VideoPlanPart {
   const part = record(value, "plan part");
   const type = string(part.type, "plan part.type");
   if (type === "scene.add") {
-    allowedKeys(part, ["type", "scene"], "plan part");
+    allowedKeys(part, ["type", "placement", "scene"], "plan part");
+    if (part.placement != null && part.placement !== "closer") {
+      throw new Error("plan part.placement is unsupported");
+    }
     scene(part.scene, "plan part.scene");
   } else if (type === "scene.patch") {
     allowedKeys(part, ["type", "sceneId", "patch"], "plan part");

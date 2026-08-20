@@ -70,6 +70,10 @@ The local authorization denies every production request. Replace it before
 deploying. The model can come from OpenAI, Anthropic, an AI SDK registry or
 gateway, or any compatible streaming adapter.
 
+For planner-selected image and video backgrounds, configure the optional
+server-only `resolveMedia` callback described in
+[Media and soundtrack audio](docs/media-and-audio.md#media-providers).
+
 ## Generate a video
 
 Call the route from React and render the player:

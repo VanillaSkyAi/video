@@ -12,6 +12,13 @@ import type { ServerTemplateRegistry } from "../visual-system/catalog/server-kit
 import { overlayServerTemplateRegistry } from "../visual-system/catalog/server-kit.js";
 import { BUILTIN_SERVER_TEMPLATE_KIT } from "../visual-system/catalog/builtin-server.js";
 import { createTemplateSceneValidator } from "../visual-system/catalog/validate.js";
+import {
+  createMediaResolvingPlanner,
+  type MediaResolver,
+} from "./media-resolver.js";
+import type { VideoInput } from "../protocol/types.js";
+
+export type { MediaResolver, MediaResolverContext, ResolvedMedia } from "./media-resolver.js";
 
 export interface VideoHandlerOptions extends Omit<
   VideoStreamHandlerOptions,
@@ -27,6 +34,8 @@ export interface VideoHandlerOptions extends Omit<
   basePrompt?: string;
   /** Authorize an app-approved media URL in addition to URLs supplied in the request. */
   allowMediaUrl?: Parameters<typeof createTemplateSceneValidator>[0]["allowMediaUrl"];
+  /** Resolve bounded semantic media intent through an application-owned provider. */
+  resolveMedia?: MediaResolver;
 }
 
 /**
@@ -48,14 +57,37 @@ export function createVideoHandler(
     includeRawProviderData,
     basePrompt,
     allowMediaUrl,
+    resolveMedia,
+    requireCloser = true,
     ...handlerOptions
   } = options;
   const templates = configuredTemplates
     ? overlayServerTemplateRegistry(BUILTIN_SERVER_TEMPLATE_KIT, configuredTemplates)
     : BUILTIN_SERVER_TEMPLATE_KIT;
+  const approvedMediaUrls = new WeakMap<VideoInput, Set<string>>();
+  const openingReadyInputs = new WeakSet<VideoInput>();
+  const approveUrl = (input: VideoInput, url: string) => {
+    const approved = approvedMediaUrls.get(input) ?? new Set<string>();
+    approved.add(url);
+    approvedMediaUrls.set(input, approved);
+  };
+  const planner = createTextDeltaVideoPlanner({ streamText, includeRawProviderData });
+  const validateTemplateScene = createTemplateSceneValidator({
+    kit: templates,
+    allowMediaUrl: (url, context) =>
+      approvedMediaUrls.get(context.input)?.has(url) === true ||
+      allowMediaUrl?.(url, context) === true,
+  });
   return createVideoStreamHandler({
     ...handlerOptions,
-    generate: createTextDeltaVideoPlanner({ streamText, includeRawProviderData }),
+    requireCloser,
+    generate: createMediaResolvingPlanner({
+      planner,
+      templates,
+      resolveMedia,
+      approveUrl,
+      isOpeningReady: (input) => openingReadyInputs.has(input),
+    }),
     systemPrompt: ({ capabilities }) => {
       const selectedIds = capabilities?.templates == null
         ? undefined
@@ -66,10 +98,17 @@ export function createVideoHandler(
       return createTemplateSystemPrompt({
         kit: { listTemplateMetadata: () => selectedTemplates },
         basePrompt,
+        mediaResolverAvailable: resolveMedia != null,
       });
     },
     supportedCapabilities: templates.capabilities,
-    validateScene: createTemplateSceneValidator({ kit: templates, allowMediaUrl }),
+    validateScene: (scene, context) => {
+      validateTemplateScene(scene, context);
+      const isAsk = templates.getTemplateMetadata(scene.templateId)?.jobs?.includes("ask") === true;
+      if (!isAsk) {
+        openingReadyInputs.add(context.input);
+      }
+    },
     getTemplatePacing: (templateId) => templates.getTemplateMetadata(templateId),
   });
 }

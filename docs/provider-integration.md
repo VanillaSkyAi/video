@@ -84,6 +84,13 @@ duration actually committed; compare it with the `maxDurationSec` supplied by
 your application when applying a retry policy. These fields provide a
 server-side quality signal without exposing model metadata in the browser.
 Warnings include the same bounded typed warnings emitted to the client.
+`plan_incomplete` identifies a playable partial response whose planner reported
+a length limit; applications should show that result as incomplete and may
+offer a bounded retry with a larger output or duration budget.
+`plan_missing_closer` identifies a playable plan that ended without the
+explicit final scene required by the standard handler. `createVideoHandler`
+sets `requireCloser: true` by default. Specialized deterministic integrations
+may set `requireCloser: false`; ordinary AI planners should keep the default.
 For non-interactive backfills, define an application threshold (for example,
 no rejected scenes and a useful committed-duration ratio) and retry a bounded
 number of times. Keep the best accepted result rather than treating

@@ -9,7 +9,7 @@ import type {
 import type { VideoFinishReason, VideoWarning } from "../server.js";
 
 export type MockVideoStreamPart =
-  | { type: "scene.add"; scene: VideoScene }
+  | { type: "scene.add"; placement?: "closer"; scene: VideoScene }
   | {
       type: "scene.patch";
       sceneId: string;

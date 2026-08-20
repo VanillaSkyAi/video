@@ -203,7 +203,7 @@ export interface VideoGenerationContext {
 }
 
 export type VideoPlanPart =
-  | { type: "scene.add"; scene: VideoScene }
+  | { type: "scene.add"; placement?: "closer"; scene: VideoScene }
   | {
       type: "scene.patch";
       sceneId: string;
@@ -270,6 +270,8 @@ export interface CreateVideoOptions {
   getTemplatePacing?: (templateId: string) => VideoTemplatePacing | undefined;
   /** Invalid generated parts fail the run by default. Server handlers opt into dropping them. */
   invalidPartBehavior?: "drop" | "fail";
+  /** Require the planner to reserve one explicit final scene before reporting a complete plan. */
+  requireCloser?: boolean;
   /** Receives each full internal failure once. Exceptions are isolated. */
   onError?: (error: Error) => unknown;
   /** Receives each client-safe warning once. Exceptions are isolated. */

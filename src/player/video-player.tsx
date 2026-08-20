@@ -21,10 +21,20 @@ import { parseVideo } from "../protocol/persistence.js";
 import { overlayTemplateRegistry, type TemplateRegistry } from "../visual-system/catalog/kit.js";
 import { BUILTIN_TEMPLATE_KIT, preloadBuiltinTemplate } from "../visual-system/catalog/builtin.js";
 
+export type VideoPlaybackMode =
+  | "manual"
+  | "muted-autoplay"
+  | "autoplay-with-sound"
+  | "autoplay-after-interaction";
+
+const MINIMUM_GENERATION_INTRO_MS = 3_000;
+
 interface VideoPlayerRuntimeProps {
   kit: TemplateRegistry;
   stream?: AsyncIterable<VideoEvent>;
   video?: Video;
+  /** High-level startup policy. When set, this overrides autoPlay and startMuted. */
+  playbackMode?: VideoPlaybackMode;
   /** Initial playback state. Reduced-motion preferences take precedence. */
   autoPlay?: boolean;
   startMuted?: boolean;
@@ -44,6 +54,8 @@ interface VideoPlayerRuntimeProps {
 }
 
 interface VideoPlayerSharedProps {
+  /** High-level startup policy. When set, this overrides autoPlay and startMuted. */
+  playbackMode?: VideoPlaybackMode;
   /** Initial playback state. Reduced-motion preferences take precedence. */
   autoPlay?: boolean;
   startMuted?: boolean;
@@ -78,6 +90,7 @@ export function VideoPlayerRuntime({
   kit,
   stream,
   video,
+  playbackMode,
   autoPlay = true,
   startMuted = true,
   width,
@@ -90,38 +103,78 @@ export function VideoPlayerRuntime({
   onError,
   onStateChange,
 }: VideoPlayerRuntimeProps): ReactElement {
-  const [reducedMotion] = useState(() =>
+  const [reducedMotion, setReducedMotion] = useState(() =>
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
-  const [isPlaying, setIsPlaying] = useState(() => autoPlay && !reducedMotion);
-  const [isMuted, setIsMuted] = useState(startMuted);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const resolvedStartMuted = playbackMode === "muted-autoplay"
+    ? true
+    : playbackMode
+      ? false
+      : startMuted;
+  const shouldAutoPlay = playbackMode === "manual"
+    ? false
+    : playbackMode === "autoplay-after-interaction"
+      ? audioUnlocked
+      : playbackMode === "muted-autoplay" || playbackMode === "autoplay-with-sound"
+        ? true
+        : autoPlay;
+  const autoStartGeneration = Boolean(playbackMode && stream && shouldAutoPlay && !reducedMotion);
+  const [isPlaying, setIsPlaying] = useState(() => shouldAutoPlay && !reducedMotion && !autoStartGeneration);
+  const [isMuted, setIsMuted] = useState(resolvedStartMuted);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [state, setState] = useState<VideoState>(() => video ? savedVideoState(video) : createVideoState());
   const [currentTime, setCurrentTime] = useState(0);
+  const [activeStream, setActiveStream] = useState(stream);
+  const [replacementPending, setReplacementPending] = useState(false);
+  const [startRequested, setStartRequested] = useState(autoStartGeneration);
+  const [introPlaying, setIntroPlaying] = useState(autoStartGeneration);
+  const [generationIntroComplete, setGenerationIntroComplete] = useState(() => !playbackMode || !stream);
   const [observedWidth, setObservedWidth] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef(state);
   const timeRef = useRef(currentTime);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const introStartedAtRef = useRef<number | null>(autoStartGeneration ? performance.now() : null);
   const callbacksRef = useRef({ onComplete, onError, onStateChange });
 
   stateRef.current = state;
   timeRef.current = currentTime;
   callbacksRef.current = { onComplete, onError, onStateChange };
 
+  if (stream !== activeStream) {
+    const autoStartReplacement = Boolean(playbackMode && stream && shouldAutoPlay && !reducedMotion);
+    setActiveStream(stream);
+    setReplacementPending(stream != null);
+    setState(video ? savedVideoState(video) : createVideoState());
+    setCurrentTime(0);
+    setIsMuted(resolvedStartMuted);
+    setIsPlaying(shouldAutoPlay && !reducedMotion && !autoStartReplacement);
+    setStartRequested(autoStartReplacement);
+    setIntroPlaying(autoStartReplacement);
+    setGenerationIntroComplete(!playbackMode || !stream);
+    introStartedAtRef.current = autoStartReplacement ? performance.now() : null;
+  }
+
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     const handleChange = (event: MediaQueryListEvent) => {
-      if (event.matches) setIsPlaying(false);
+      setReducedMotion(event.matches);
+      if (event.matches) {
+        introStartedAtRef.current = null;
+        setStartRequested(false);
+        setIntroPlaying(false);
+        setIsPlaying(false);
+      }
     };
     preference.addEventListener?.("change", handleChange);
     return () => preference.removeEventListener?.("change", handleChange);
   }, []);
 
-  useEffect(() => setIsMuted(startMuted), [startMuted]);
+  useEffect(() => setIsMuted(resolvedStartMuted), [resolvedStartMuted]);
 
   useEffect(() => {
     const updateFullscreen = () => setIsFullscreen(document.fullscreenElement === containerRef.current);
@@ -160,6 +213,7 @@ export function VideoPlayerRuntime({
             ...(current.config ? { mutableSceneIds } : {}),
           });
           stateRef.current = next;
+          setReplacementPending(false);
           setState(next);
           callbacksRef.current.onStateChange?.(next);
           if (next.status === "complete" && current.status !== "complete") {
@@ -245,17 +299,73 @@ export function VideoPlayerRuntime({
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (isPlaying) {
-      void audio.play().catch(() => {
-        // Do not let visuals silently run ahead when a browser blocks audible
-        // autoplay. Pause so the visible play control can provide the required
-        // user gesture and restart audio and motion together.
-        setIsPlaying(false);
-      });
+    if (isPlaying || introPlaying) {
+      void audio.play()
+        .then(() => {
+          if (!audio.muted) setAudioUnlocked(true);
+        })
+        .catch(() => {
+          // Do not let visuals silently run ahead when a browser blocks audible
+          // autoplay. Return to the poster so a visible play control can provide
+          // the required user gesture and restart audio and motion together.
+          audio.currentTime = 0;
+          timeRef.current = 0;
+          setCurrentTime(0);
+          setStartRequested(false);
+          setIntroPlaying(false);
+          setIsPlaying(false);
+        });
     } else {
       audio.pause();
     }
-  }, [isPlaying, state.config?.audio?.audioUrl]);
+  }, [introPlaying, isPlaying, state.config?.audio?.audioUrl]);
+
+  useEffect(() => {
+    if (!state.config?.scenes.length) {
+      const terminalWithoutVideo = state.status === "complete" || state.status === "error" || state.status === "aborted";
+      if (terminalWithoutVideo) {
+        audioRef.current?.pause();
+        introStartedAtRef.current = null;
+        setStartRequested(false);
+        setIntroPlaying(false);
+        setGenerationIntroComplete(true);
+      }
+      return;
+    }
+    if (!startRequested) return;
+
+    if (state.config.scenes[0]?.id === "supplied-opening") {
+      timeRef.current = 0;
+      setCurrentTime(0);
+      if (audioRef.current) audioRef.current.volume = state.config.audio?.volume ?? 1;
+      introStartedAtRef.current = null;
+      setStartRequested(false);
+      setIntroPlaying(false);
+      setGenerationIntroComplete(true);
+      setIsPlaying(true);
+      return;
+    }
+
+    const startedAt = introStartedAtRef.current ?? performance.now();
+    introStartedAtRef.current = startedAt;
+    const remaining = Math.max(0, MINIMUM_GENERATION_INTRO_MS - (performance.now() - startedAt));
+    const startGeneratedVideo = () => {
+      timeRef.current = 0;
+      setCurrentTime(0);
+      if (audioRef.current) audioRef.current.volume = state.config?.audio?.volume ?? 1;
+      introStartedAtRef.current = null;
+      setStartRequested(false);
+      setIntroPlaying(false);
+      setGenerationIntroComplete(true);
+      setIsPlaying(true);
+    };
+    if (remaining <= 0) {
+      startGeneratedVideo();
+      return;
+    }
+    const timer = setTimeout(startGeneratedVideo, remaining);
+    return () => clearTimeout(timer);
+  }, [startRequested, state.config?.audio?.volume, state.config?.scenes.length, state.status]);
 
   const streamOrientation = state.config?.orientation ?? "portrait";
   const responsiveWidth = width ?? observedWidth;
@@ -275,15 +385,72 @@ export function VideoPlayerRuntime({
   const duration = config ? getVideoDuration(config) : 0;
   const terminal = state.status === "complete" || state.status === "error" || state.status === "aborted";
   const ended = terminal && duration > 0 && currentTime >= duration - 0.001;
+  const generationIntroWaiting = Boolean(playbackMode && stream && !generationIntroComplete);
+  const firstSceneRange = config ? resolveVideoTimeline(config)[0] : undefined;
+  const hasSuppliedOpening = firstSceneRange?.scene.id === "supplied-opening";
+  const showStartPoster = (!generationIntroWaiting || hasSuppliedOpening) && !startRequested && !isPlaying && !ended && currentTime <= 0.001 && Boolean(config?.scenes.length);
+  const firstSceneHoldProgress = firstSceneRange
+    ? kit.getTemplateMetadata(firstSceneRange.scene.templateId)?.transitionTiming?.holdProgress ?? 0.7
+    : 0;
+  const posterTime = firstSceneRange
+    ? firstSceneRange.start + Math.max(0, firstSceneRange.end - firstSceneRange.start) * firstSceneHoldProgress
+    : currentTime;
+  const startPlayback = () => {
+    setGenerationIntroComplete(true);
+    const audio = audioRef.current;
+    if (audio) {
+      void audio.play()
+        .then(() => {
+          if (!audio.muted) setAudioUnlocked(true);
+        })
+        .catch(() => {
+          audio.currentTime = 0;
+          timeRef.current = 0;
+          setCurrentTime(0);
+          setIsPlaying(false);
+        });
+    }
+    setIsPlaying(true);
+  };
+  const armPlayback = () => {
+    introStartedAtRef.current = performance.now();
+    setStartRequested(true);
+    setIntroPlaying(true);
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const volume = stateRef.current.config?.audio?.volume ?? 1;
+    audio.volume = volume;
+    void audio.play()
+      .then(() => {
+        if (!audio.muted) setAudioUnlocked(true);
+      })
+      .catch(() => {
+        audio.volume = volume;
+        audio.currentTime = 0;
+        timeRef.current = 0;
+        setCurrentTime(0);
+        introStartedAtRef.current = null;
+        setStartRequested(false);
+        setIntroPlaying(false);
+        setIsPlaying(false);
+      });
+  };
   const togglePlayback = () => {
+    if (startRequested) return;
+    if (!stateRef.current.config?.scenes.length) {
+      armPlayback();
+      return;
+    }
     if (!isPlaying && ended) {
       timeRef.current = 0;
       setCurrentTime(0);
       if (audioRef.current) audioRef.current.currentTime = 0;
-      setIsPlaying(true);
+      startPlayback();
       return;
     }
-    setIsPlaying((playing) => !playing);
+    if (isPlaying) setIsPlaying(false);
+    else startPlayback();
   };
   const toggleFullscreen = async () => {
     const container = containerRef.current;
@@ -305,7 +472,31 @@ export function VideoPlayerRuntime({
     font: "600 13px/1 system-ui, sans-serif",
     cursor: "pointer",
   };
-  const generationCoverVisible = state.status === "streaming" && !config?.scenes.length;
+  const startButtonStyle: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 54,
+    padding: "12px 18px",
+    border: "1px solid rgba(255, 255, 255, 0.3)",
+    borderRadius: 999,
+    backgroundColor: "rgba(9, 7, 18, 0.88)",
+    color: "#ffffff",
+    boxShadow: "0 8px 28px rgba(0, 0, 0, 0.4)",
+    backdropFilter: "blur(12px)",
+    font: "700 15px/1 system-ui, sans-serif",
+    cursor: "pointer",
+  };
+  const startButtonPositionStyle: CSSProperties = {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    zIndex: 3,
+    transform: "translate(-50%, -50%)",
+  };
+  const pendingReplacement = replacementPending && state.status === "idle";
+  const displayedStatus = pendingReplacement ? "streaming" : state.status;
+  const generationCoverVisible = (generationIntroWaiting && !hasSuppliedOpening) || (displayedStatus === "streaming" && !config?.scenes.length);
   const coverBackground = config?.style.brand.background;
   const coverText = config?.style.brand.colors.foreground ?? "#ffffff";
   const coverBackgroundCss = coverBackground?.type === "solid"
@@ -325,13 +516,19 @@ export function VideoPlayerRuntime({
         }
       }}
       data-testid="video-player"
-      data-status={state.status}
+      data-status={displayedStatus}
       data-finish-reason={state.finishReason}
       data-scenes={config?.scenes.length ?? 0}
       data-orientation={orientation}
       data-current-time={currentTime.toFixed(3)}
-      data-playing={isPlaying}
+      data-playing={isPlaying || introPlaying}
       data-ended={ended}
+      data-start-poster={showStartPoster}
+      data-start-requested={startRequested}
+      data-intro-playing={introPlaying}
+      data-generation-intro-complete={generationIntroComplete}
+      data-audio-unlocked={audioUnlocked}
+      data-playback-mode={playbackMode ?? "custom"}
       className={className}
       style={{
         width: width ?? "100%",
@@ -359,7 +556,7 @@ export function VideoPlayerRuntime({
             fontFamily: fontStack(config?.style.brand.font),
           }}
         >
-          <div>
+          <div style={{ position: "absolute", top: "28%", left: "10%", right: "10%" }}>
             <div aria-hidden="true" style={{ fontSize: "clamp(28px, 8vw, 72px)", opacity: 0.9 }}>✦</div>
             <strong style={{ display: "block", marginTop: 18, fontSize: "clamp(24px, 5vw, 56px)", lineHeight: 1.08 }}>
               Creating your video…
@@ -368,12 +565,23 @@ export function VideoPlayerRuntime({
               Choosing the best scenes for your content.
             </span>
           </div>
+          {!startRequested && !isPlaying ? (
+            <button
+              type="button"
+              aria-label={config?.audio && !isMuted ? "Play video with sound" : "Play video response"}
+              onClick={armPlayback}
+              style={{ ...startButtonStyle, ...startButtonPositionStyle }}
+            >
+              <span aria-hidden="true">▶</span>
+              {config?.audio && !isMuted ? "Play with sound" : "Play video"}
+            </button>
+          ) : null}
         </div>
       ) : config?.scenes.length ? (
         <VideoFrame
           kit={kit}
           config={displayConfig!}
-          time={currentTime}
+          time={showStartPoster ? posterTime : currentTime}
           width={dimensions.width}
           height={dimensions.height}
           playing={isPlaying}
@@ -385,6 +593,21 @@ export function VideoPlayerRuntime({
           }}
         />
       ) : null}
+      {showStartPoster ? (
+        <button
+          type="button"
+          data-testid="video-start-button"
+          aria-label={config?.audio && !isMuted ? "Play video with sound" : "Play video response"}
+          onClick={startPlayback}
+          style={{
+            ...startButtonStyle,
+            ...startButtonPositionStyle,
+          }}
+        >
+          <span aria-hidden="true">▶</span>
+          {config?.audio && !isMuted ? "Play with sound" : "Play video"}
+        </button>
+      ) : null}
       {config?.audio ? (
         <audio
           ref={audioRef}
@@ -392,7 +615,7 @@ export function VideoPlayerRuntime({
           autoPlay={isPlaying}
           muted={isMuted}
           preload="auto"
-          loop={state.status === "streaming"}
+          loop={state.status === "streaming" || introPlaying}
         />
       ) : null}
       {!generationCoverVisible ? <div
@@ -415,20 +638,23 @@ export function VideoPlayerRuntime({
           boxShadow: "0 4px 20px rgba(0, 0, 0, 0.35)",
         }}
       >
-        <button
+        {!showStartPoster ? <button
           type="button"
           aria-label={ended ? "Replay video response" : isPlaying ? "Pause video response" : "Play video response"}
           onClick={togglePlayback}
           style={controlButtonStyle}
         >
-          {ended ? "↻" : isPlaying ? "Ⅱ" : "▶"}
-        </button>
+          {ended ? "↻ Replay" : isPlaying ? "Ⅱ" : "▶"}
+        </button> : null}
         {config?.audio ? (
           <button
             type="button"
             aria-label={isMuted ? "Unmute video response" : "Mute video response"}
             aria-pressed={!isMuted}
-            onClick={() => setIsMuted((muted) => !muted)}
+            onClick={() => setIsMuted((muted) => {
+              if (muted) setAudioUnlocked(true);
+              return !muted;
+            })}
             style={controlButtonStyle}
           >
             {isMuted ? "🔇" : "🔊"}

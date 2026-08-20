@@ -12,6 +12,8 @@ export type VideoWarningCode =
   | "scene_omitted_for_closer"
   | "scene_patch_rejected_readability"
   | "chart_scale_imbalance"
+  | "plan_incomplete"
+  | "plan_missing_closer"
   | "provider_warning"
   | "provider_diagnostics_unavailable";
 
@@ -21,6 +23,8 @@ export const VIDEO_WARNING_CATEGORIES: Readonly<Record<VideoWarningCode, VideoWa
   scene_omitted_for_closer: "readability",
   scene_patch_rejected_readability: "readability",
   chart_scale_imbalance: "readability",
+  plan_incomplete: "provider",
+  plan_missing_closer: "provider",
   provider_warning: "provider",
   provider_diagnostics_unavailable: "provider",
 };

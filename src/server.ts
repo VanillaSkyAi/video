@@ -1,4 +1,9 @@
-export { createVideoHandler } from "./server/create-video-handler.js";
+export {
+  createVideoHandler,
+  type MediaResolver,
+  type MediaResolverContext,
+  type ResolvedMedia,
+} from "./server/create-video-handler.js";
 export type { VideoHandlerOptions } from "./server/create-video-handler.js";
 export { createServerTemplateRegistry } from "./visual-system/catalog/server-kit.js";
 export type { ServerTemplateRegistry } from "./visual-system/catalog/server-kit.js";

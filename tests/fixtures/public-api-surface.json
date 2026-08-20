@@ -35,6 +35,9 @@
       "createVideoHandler"
     ],
     "typeExports": [
+      "MediaResolver",
+      "MediaResolverContext",
+      "ResolvedMedia",
       "ServerTemplateMetadata",
       "ServerTemplateRegistry",
       "VideoFinishReason",
@@ -60,6 +63,7 @@
       "UseVideoResult",
       "VideoError",
       "VideoErrorOptions",
+      "VideoPlaybackMode",
       "VideoPlayerProps"
     ]
   },

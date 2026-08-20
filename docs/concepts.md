@@ -54,6 +54,12 @@ another streaming text model.
 The planner does not create public event IDs, checksums, revisions, or final
 snapshots. The runtime owns those guarantees.
 
+`createVideoHandler` asks the planner to emit one early
+`scene.add` with `placement: "closer"` after the first playable body scene.
+That placement is planner-only: the runtime holds the validated closer,
+reserves its readable duration while later body scenes stream, and appends it
+last without persisting `placement` into the completed `Video`.
+
 | Boundary | Type | Owner |
 | --- | --- | --- |
 | Planner parts | Internal validated plan data | Server/provider adapter |
@@ -73,6 +79,7 @@ audio.set             optional, before any scene
 scene.add             supplied opening
 scene.add             generated body
 scene.add             generated body
+scene.add             reserved closer
 response.complete     exact terminal snapshot
 ```
 

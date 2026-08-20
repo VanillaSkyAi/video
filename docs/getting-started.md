@@ -90,10 +90,12 @@ reactive UI.
 
 `video.status` is `idle`, `streaming`, `complete`, `error`, or `aborted`.
 `video.video` is the latest deterministic video, and `video.warnings` contains
-bounded typed diagnostics safe to show or branch on. Provider limits and
-content filters are available to the server through the `onComplete` summary;
-surface that server-owned state separately if completeness matters to your
-product.
+bounded typed diagnostics safe to show or branch on. A playable response that
+stops at a planner length limit includes a `plan_incomplete` warning because
+requested scenes or the ending may be missing. Provider finish reasons and
+content-filter details remain available to the server through the `onComplete`
+summary; surface that server-owned state separately when completeness matters
+to your product.
 
 Persist a completed `Video` as JSON and play it later without another model
 request:

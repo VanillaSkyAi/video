@@ -126,6 +126,8 @@ describe("template-aware open prompt", () => {
     expect(prompt).toContain("Never invent peer values");
     expect(prompt).toContain("Do not repeat the same list, metric, or claim");
     expect(prompt).toContain("once a fact is visible, treat it as unavailable");
+    expect(prompt).toContain("Keep related entries adjacent");
+    expect(prompt).toContain("Ordering never permits merging or omitting entries");
     expect(prompt).toContain("Do not infer that something is scheduled, ready, triggered");
     expect(prompt).toContain("cardList and steps each need two or three unused facts");
     expect(prompt).toContain("Never invent a fact to fill a collection");
@@ -154,6 +156,30 @@ describe("template-aware open prompt", () => {
     const bigNumber = catalog.find(({ id }: { id: string }) => id === "bigNumber");
     expect(bigNumber?.media).toBe(true);
     expect(bigNumber?.variables).not.toHaveProperty("mediaUrl");
+  });
+
+  it("exposes bounded media intent only when the host configures a resolver", async () => {
+    const { createTemplateSystemPrompt } = await import("../src/visual-system/catalog/internal");
+    const { loadAcceptanceKit } = await import("../scripts/acceptance/catalog");
+    const kit = loadAcceptanceKit(["bigNumber", "media", "confetti", "emojiBurst"]);
+
+    const withoutResolver = createTemplateSystemPrompt({ kit });
+    const withResolver = createTemplateSystemPrompt({ kit, mediaResolverAvailable: true });
+    const catalog = JSON.parse(withResolver.trim().split("\n").at(-1) ?? "[]");
+
+    expect(withoutResolver).not.toContain('"mediaKeyword"');
+    expect(withResolver).toContain('"mediaKeyword":"string{2..80}"');
+    expect(withResolver).toContain("Prefer a relevant resolved image or video background on later media-capable scenes");
+    expect(withResolver).not.toContain("Never expose a loading placeholder or unresolved media keyword");
+    expect(withResolver).toContain("The host removes mediaKeyword before the scene reaches the browser");
+    expect(withResolver).not.toContain('{"type":"asset.patch","sceneId":"stable-id"');
+    expect(withResolver).toContain("End with a grounded payoff using media, emojiBurst, or confetti");
+    expect(withResolver).toContain('"placement":"closer"');
+    expect(withResolver).toContain("Emit exactly one closer immediately after the first playable body scene");
+    expect(withResolver).toContain("answer the story's so-what");
+    expect(withResolver).toContain("6–12 words");
+    expect(withResolver).toContain("The runtime holds that closer and appends it last");
+    expect(catalog.find(({ id }: { id: string }) => id === "media")?.jobs).toContain("payoff");
   });
 
   it("keeps structured facts and the closer in content-fit scenes", async () => {

@@ -150,6 +150,30 @@
           "declare function createVideoHandler(options: VideoHandlerOptions): VideoStreamHandler;"
         ]
       },
+      "MediaResolver": {
+        "kinds": [
+          "type"
+        ],
+        "declaration": [
+          "type MediaResolver = (query: string, context: MediaResolverContext) => ResolvedMedia | null | Promise<ResolvedMedia | null>;"
+        ]
+      },
+      "MediaResolverContext": {
+        "kinds": [
+          "type"
+        ],
+        "declaration": [
+          "interface MediaResolverContext {\n    input: VideoInput;\n    templateId: string;\n    preferredType: \"image\" | \"video\" | \"any\";\n    signal: AbortSignal;\n}"
+        ]
+      },
+      "ResolvedMedia": {
+        "kinds": [
+          "type"
+        ],
+        "declaration": [
+          "interface ResolvedMedia {\n    url: string;\n    type: \"image\" | \"video\";\n    posterUrl?: string;\n}"
+        ]
+      },
       "ServerTemplateMetadata": {
         "kinds": [
           "type"
@@ -187,7 +211,7 @@
           "type"
         ],
         "declaration": [
-          "interface VideoHandlerOptions extends Omit<VideoStreamHandlerOptions, \"generate\" | \"systemPrompt\" | \"supportedCapabilities\" | \"validateScene\" | \"getTemplatePacing\"> {\n    templates?: ServerTemplateRegistry;\n    streamText: TextDeltaVideoPlannerOptions[\"streamText\"];\n    includeRawProviderData?: boolean;\n    basePrompt?: string;\n    allowMediaUrl?: Parameters<typeof createTemplateSceneValidator>[0][\"allowMediaUrl\"];\n}"
+          "interface VideoHandlerOptions extends Omit<VideoStreamHandlerOptions, \"generate\" | \"systemPrompt\" | \"supportedCapabilities\" | \"validateScene\" | \"getTemplatePacing\"> {\n    templates?: ServerTemplateRegistry;\n    streamText: TextDeltaVideoPlannerOptions[\"streamText\"];\n    includeRawProviderData?: boolean;\n    basePrompt?: string;\n    allowMediaUrl?: Parameters<typeof createTemplateSceneValidator>[0][\"allowMediaUrl\"];\n    resolveMedia?: MediaResolver;\n}"
         ]
       },
       "VideoProviderUsage": {
@@ -240,7 +264,7 @@
       "interface VideoScene {\n    id: string;\n    templateId: string;\n    variables: Record<string, unknown>;\n    textArchetype?: string;\n    backgroundEffect?: string;\n    timing: VideoTiming;\n}",
       "interface VideoSceneValidationContext {\n    input: VideoInput;\n    previousScenes: readonly VideoScene[];\n}",
       "interface VideoSnapshotRetention {\n    source?: boolean;\n    instructions?: boolean;\n    suppliedMediaUrls?: boolean;\n}",
-      "interface VideoStreamHandlerOptions {\n    generate: VideoPlanner;\n    systemPrompt?: string | ((context: {\n        request: VideoRequest;\n        capabilities?: VideoCapabilities;\n    }) => string);\n    selectAudio?: (input: VideoInput) => VideoAudio | undefined;\n    createRunId?: (request: VideoRequest) => string;\n    allowedOrigins?: string[];\n    authorize: ((request: Request) => boolean | Promise<boolean>) | \"none\";\n    maxBodyBytes?: number;\n    heartbeatMs?: number | false;\n    onError?: (error: Error) => unknown;\n    onWarning?: (warning: VideoWarning) => unknown;\n    onComplete?: (summary: VideoGenerationSummary) => unknown;\n    invalidPartBehavior?: \"drop\" | \"fail\";\n    allowCredentials?: boolean;\n    supportedCapabilities?: VideoCapabilities;\n    validateScene?: VideoSceneValidator;\n    getTemplatePacing?: (templateId: string) => VideoTemplatePacing | undefined;\n    snapshotRetention?: VideoSnapshotRetention;\n    replay?: (cursor: VideoResumeCursor, context: {\n        request: VideoRequest;\n        signal: AbortSignal;\n    }) => AsyncIterable<VideoEvent>;\n}",
+      "interface VideoStreamHandlerOptions {\n    generate: VideoPlanner;\n    systemPrompt?: string | ((context: {\n        request: VideoRequest;\n        capabilities?: VideoCapabilities;\n    }) => string);\n    selectAudio?: (input: VideoInput) => VideoAudio | undefined;\n    createRunId?: (request: VideoRequest) => string;\n    allowedOrigins?: string[];\n    authorize: ((request: Request) => boolean | Promise<boolean>) | \"none\";\n    maxBodyBytes?: number;\n    heartbeatMs?: number | false;\n    onError?: (error: Error) => unknown;\n    onWarning?: (warning: VideoWarning) => unknown;\n    onComplete?: (summary: VideoGenerationSummary) => unknown;\n    invalidPartBehavior?: \"drop\" | \"fail\";\n    requireCloser?: boolean;\n    allowCredentials?: boolean;\n    supportedCapabilities?: VideoCapabilities;\n    validateScene?: VideoSceneValidator;\n    getTemplatePacing?: (templateId: string) => VideoTemplatePacing | undefined;\n    snapshotRetention?: VideoSnapshotRetention;\n    replay?: (cursor: VideoResumeCursor, context: {\n        request: VideoRequest;\n        signal: AbortSignal;\n    }) => AsyncIterable<VideoEvent>;\n}",
       "interface VideoStyle {\n    brand: VideoBrand;\n    preset?: string;\n    defaultBackgroundEffect?: string;\n    defaultTextArchetype?: string;\n    defaultTransition?: string;\n    density?: string;\n    motion?: string;\n}",
       "interface VideoStyleOptions {\n    density?: \"airy\" | \"normal\" | \"packed\";\n    motion?: \"calm\" | \"normal\" | \"punchy\";\n    textArchetype?: \"subtle\" | \"typewriter\" | \"wordStagger\" | \"slam\" | \"cinematic\" | \"heroWord\";\n    backgroundEffect?: \"static\" | \"slow-zoom-in\" | \"slow-zoom-out\" | \"ken-burns\" | \"drift\" | \"pulse\" | \"breathe\" | \"slow-tilt\" | \"camera-shake\";\n}",
       "interface VideoSuppliedMedia {\n    id: string;\n    url: string;\n    type: \"image\" | \"video\";\n    description?: string;\n    mimeType?: string;\n    posterUrl?: string;\n    focalPoint?: \"center\" | \"top\" | \"bottom\" | \"left\" | \"right\";\n    treatment?: \"subtle\" | \"cinematic\" | \"text-safe\";\n    role?: \"product\" | \"proof\" | \"background\" | \"logo\";\n}",
@@ -261,10 +285,10 @@
       "type VideoExtensionEventType = `data.${string}`;",
       "type VideoOrientation = \"portrait\" | \"landscape\";",
       "type VideoPlanner = (context: VideoGenerationContext) => AsyncIterable<VideoPlanPart>;",
-      "type VideoPlanPart = {\n    type: \"scene.add\";\n    scene: VideoScene;\n} | {\n    type: \"scene.patch\";\n    sceneId: string;\n    patch: Partial<Omit<VideoScene, \"id\" | \"templateId\">>;\n} | {\n    type: \"asset.patch\";\n    sceneId: string;\n    variables: Record<string, unknown>;\n} | {\n    type: \"plan.complete\";\n    finishReason?: \"stop\" | \"length\" | \"content-filter\" | \"other\";\n} | {\n    type: \"plan.error\";\n    error: {\n        message: string;\n        code?: string;\n        recoverable?: boolean;\n    };\n};",
+      "type VideoPlanPart = {\n    type: \"scene.add\";\n    placement?: \"closer\";\n    scene: VideoScene;\n} | {\n    type: \"scene.patch\";\n    sceneId: string;\n    patch: Partial<Omit<VideoScene, \"id\" | \"templateId\">>;\n} | {\n    type: \"asset.patch\";\n    sceneId: string;\n    variables: Record<string, unknown>;\n} | {\n    type: \"plan.complete\";\n    finishReason?: \"stop\" | \"length\" | \"content-filter\" | \"other\";\n} | {\n    type: \"plan.error\";\n    error: {\n        message: string;\n        code?: string;\n        recoverable?: boolean;\n    };\n};",
       "type VideoSceneValidator = (scene: VideoScene, context: VideoSceneValidationContext) => void;",
       "type VideoStreamHandler = (request: Request) => Promise<Response>;",
-      "type VideoWarningCode = \"scene_duration_adjusted\" | \"scene_omitted_unreadable\" | \"scene_omitted_for_closer\" | \"scene_patch_rejected_readability\" | \"chart_scale_imbalance\" | \"provider_warning\" | \"provider_diagnostics_unavailable\";"
+      "type VideoWarningCode = \"scene_duration_adjusted\" | \"scene_omitted_unreadable\" | \"scene_omitted_for_closer\" | \"scene_patch_rejected_readability\" | \"chart_scale_imbalance\" | \"plan_incomplete\" | \"plan_missing_closer\" | \"provider_warning\" | \"provider_diagnostics_unavailable\";"
     ]
   },
   "@vanillaskyai/video/react": {
@@ -310,6 +334,14 @@
           "interface VideoErrorOptions {\n    code: string;\n    status?: number;\n    requestId?: string;\n    runId?: string;\n    recoverable?: boolean;\n}"
         ]
       },
+      "VideoPlaybackMode": {
+        "kinds": [
+          "type"
+        ],
+        "declaration": [
+          "type VideoPlaybackMode = \"manual\" | \"muted-autoplay\" | \"autoplay-with-sound\" | \"autoplay-after-interaction\";"
+        ]
+      },
       "VideoPlayer": {
         "kinds": [
           "value"
@@ -348,7 +380,7 @@
       "interface VideoEventDataMap {\n    \"response.start\": {\n        requestId: string;\n        format: {\n            orientation: VideoOrientation;\n        };\n        style: VideoStyle;\n        meta?: Video[\"meta\"];\n        capabilities?: VideoCapabilities;\n    };\n    \"audio.set\": {\n        audio: VideoAudio;\n    };\n    \"scene.add\": {\n        scene: VideoScene;\n        position: number;\n        revision: number;\n    };\n    \"scene.patch\": {\n        sceneId: string;\n        revision: number;\n        patch: Partial<Omit<VideoScene, \"id\" | \"templateId\">>;\n    };\n    \"asset.patch\": {\n        sceneId: string;\n        revision: number;\n        variables: Record<string, unknown>;\n    };\n    \"response.warning\": {\n        warning: VideoWarning;\n    };\n    \"response.complete\": {\n        finishReason: VideoFinishReason;\n        snapshot: Video;\n        checksum: string;\n    };\n    \"response.error\": {\n        error: {\n            code: string;\n            message: string;\n            recoverable: boolean;\n        };\n        terminal: boolean;\n        snapshot?: Video;\n    };\n    \"response.abort\": {\n        reason: string;\n        snapshot?: Video;\n    };\n}",
       "interface VideoEventEnvelope<TType extends string, TData> {\n    protocolVersion: typeof VIDEO_PROTOCOL_VERSION;\n    runId: string;\n    sequence: number;\n    eventId: string;\n    type: TType;\n    data: TData;\n}",
       "interface VideoInput {\n    input: string;\n    instructions?: string;\n    maxDurationSec?: number;\n    orientation?: VideoOrientation;\n    style?: VideoStyleOptions;\n    opening?: string;\n    brand?: VideoBrandInput;\n    personalization?: Record<string, unknown>;\n    suppliedMedia?: VideoSuppliedMedia[];\n    audio?: false | {\n        src: string;\n    };\n}",
-      "interface VideoPlayerSharedProps {\n    autoPlay?: boolean;\n    startMuted?: boolean;\n    width?: number;\n    orientation?: VideoOrientation | \"auto\";\n    responsiveBreakpoint?: number;\n    className?: string;\n    style?: CSSProperties;\n    ariaLabel?: string;\n    onComplete?: (video: Video) => void;\n    onError?: (error: Error) => void;\n}",
+      "interface VideoPlayerSharedProps {\n    playbackMode?: VideoPlaybackMode;\n    autoPlay?: boolean;\n    startMuted?: boolean;\n    width?: number;\n    orientation?: VideoOrientation | \"auto\";\n    responsiveBreakpoint?: number;\n    className?: string;\n    style?: CSSProperties;\n    ariaLabel?: string;\n    onComplete?: (video: Video) => void;\n    onError?: (error: Error) => void;\n}",
       "interface VideoScene {\n    id: string;\n    templateId: string;\n    variables: Record<string, unknown>;\n    textArchetype?: string;\n    backgroundEffect?: string;\n    timing: VideoTiming;\n}",
       "interface VideoStyle {\n    brand: VideoBrand;\n    preset?: string;\n    defaultBackgroundEffect?: string;\n    defaultTextArchetype?: string;\n    defaultTransition?: string;\n    density?: string;\n    motion?: string;\n}",
       "interface VideoStyleOptions {\n    density?: \"airy\" | \"normal\" | \"packed\";\n    motion?: \"calm\" | \"normal\" | \"punchy\";\n    textArchetype?: \"subtle\" | \"typewriter\" | \"wordStagger\" | \"slam\" | \"cinematic\" | \"heroWord\";\n    backgroundEffect?: \"static\" | \"slow-zoom-in\" | \"slow-zoom-out\" | \"ken-burns\" | \"drift\" | \"pulse\" | \"breathe\" | \"slow-tilt\" | \"camera-shake\";\n}",
@@ -370,7 +402,7 @@
       "type VideoOrientation = \"portrait\" | \"landscape\";",
       "type VideoStatus = \"idle\" | \"streaming\" | \"complete\" | \"error\" | \"aborted\";",
       "type VideoWarningCategory = \"validation\" | \"readability\" | \"grounding\" | \"provider\" | \"media\" | \"protocol\";",
-      "type VideoWarningCode = \"scene_duration_adjusted\" | \"scene_omitted_unreadable\" | \"scene_omitted_for_closer\" | \"scene_patch_rejected_readability\" | \"chart_scale_imbalance\" | \"provider_warning\" | \"provider_diagnostics_unavailable\";"
+      "type VideoWarningCode = \"scene_duration_adjusted\" | \"scene_omitted_unreadable\" | \"scene_omitted_for_closer\" | \"scene_patch_rejected_readability\" | \"chart_scale_imbalance\" | \"plan_incomplete\" | \"plan_missing_closer\" | \"provider_warning\" | \"provider_diagnostics_unavailable\";"
     ]
   },
   "@vanillaskyai/video/templates": {
@@ -589,7 +621,7 @@
       "interface VideoSuppliedMedia {\n    id: string;\n    url: string;\n    type: \"image\" | \"video\";\n    description?: string;\n    mimeType?: string;\n    posterUrl?: string;\n    focalPoint?: \"center\" | \"top\" | \"bottom\" | \"left\" | \"right\";\n    treatment?: \"subtle\" | \"cinematic\" | \"text-safe\";\n    role?: \"product\" | \"proof\" | \"background\" | \"logo\";\n}",
       "interface VideoTiming {\n    beatStart?: number;\n    beatEnd?: number;\n    startTime?: number;\n    endTime?: number;\n    fixedDuration?: number;\n    durationWeight?: number;\n}",
       "interface VideoWarning {\n    code: VideoWarningCode;\n    category: VideoWarningCategory;\n    message: string;\n    sceneId?: string;\n    recoverable: boolean;\n}",
-      "type MockVideoStreamPart = {\n    type: \"scene.add\";\n    scene: VideoScene;\n} | {\n    type: \"scene.patch\";\n    sceneId: string;\n    patch: Partial<Omit<VideoScene, \"id\" | \"templateId\">>;\n} | {\n    type: \"asset.patch\";\n    sceneId: string;\n    variables: Record<string, unknown>;\n} | {\n    type: \"plan.complete\";\n    finishReason?: \"stop\" | \"length\" | \"content-filter\" | \"other\";\n} | {\n    type: \"plan.error\";\n    error: {\n        message: string;\n        code?: string;\n        recoverable?: boolean;\n    };\n} | {\n    type: \"mock.delay\";\n    durationMs: number;\n} | {\n    type: \"mock.raw\";\n    text: string;\n} | {\n    type: \"mock.error\";\n    message: string;\n} | {\n    type: \"mock.wait-for-abort\";\n};",
+      "type MockVideoStreamPart = {\n    type: \"scene.add\";\n    placement?: \"closer\";\n    scene: VideoScene;\n} | {\n    type: \"scene.patch\";\n    sceneId: string;\n    patch: Partial<Omit<VideoScene, \"id\" | \"templateId\">>;\n} | {\n    type: \"asset.patch\";\n    sceneId: string;\n    variables: Record<string, unknown>;\n} | {\n    type: \"plan.complete\";\n    finishReason?: \"stop\" | \"length\" | \"content-filter\" | \"other\";\n} | {\n    type: \"plan.error\";\n    error: {\n        message: string;\n        code?: string;\n        recoverable?: boolean;\n    };\n} | {\n    type: \"mock.delay\";\n    durationMs: number;\n} | {\n    type: \"mock.raw\";\n    text: string;\n} | {\n    type: \"mock.error\";\n    message: string;\n} | {\n    type: \"mock.wait-for-abort\";\n};",
       "type SimulatedEventEnvelope<TType extends string, TData> = {\n    protocolVersion: \"0.4\";\n    runId: string;\n    sequence: number;\n    eventId: string;\n    type: TType;\n    data: TData;\n};",
       "type SimulatedVideoEvent = SimulatedEventEnvelope<\"response.start\", {\n    requestId: string;\n    format: {\n        orientation: VideoOrientation;\n    };\n    style: VideoStyle;\n    meta?: Video[\"meta\"];\n    capabilities?: {\n        templates?: string[];\n        extensions?: string[];\n    };\n}> | SimulatedEventEnvelope<\"audio.set\", {\n    audio: VideoAudio;\n}> | SimulatedEventEnvelope<\"scene.add\", {\n    scene: VideoScene;\n    position: number;\n    revision: number;\n}> | SimulatedEventEnvelope<\"scene.patch\", {\n    sceneId: string;\n    revision: number;\n    patch: Partial<Omit<VideoScene, \"id\" | \"templateId\">>;\n}> | SimulatedEventEnvelope<\"asset.patch\", {\n    sceneId: string;\n    revision: number;\n    variables: Record<string, unknown>;\n}> | SimulatedEventEnvelope<\"response.warning\", {\n    warning: VideoWarning;\n}> | SimulatedEventEnvelope<\"response.complete\", {\n    finishReason: VideoFinishReason;\n    snapshot: Video;\n    checksum: string;\n}> | SimulatedEventEnvelope<\"response.error\", {\n    error: {\n        code: string;\n        message: string;\n        recoverable: boolean;\n    };\n    terminal: boolean;\n    snapshot?: Video;\n}> | SimulatedEventEnvelope<\"response.abort\", {\n    reason: string;\n    snapshot?: Video;\n}> | SimulatedEventEnvelope<`data.${string}`, unknown>;",
       "type VideoBackground = {\n    type: \"solid\";\n    color: string;\n} | {\n    type: \"gradient\";\n    colors: [\n        string,\n        string\n    ];\n};",
@@ -598,7 +630,7 @@
       "type VideoFinishReason = \"stop\" | \"length\" | \"content-filter\" | \"error\" | \"other\";",
       "type VideoOrientation = \"portrait\" | \"landscape\";",
       "type VideoWarningCategory = \"validation\" | \"readability\" | \"grounding\" | \"provider\" | \"media\" | \"protocol\";",
-      "type VideoWarningCode = \"scene_duration_adjusted\" | \"scene_omitted_unreadable\" | \"scene_omitted_for_closer\" | \"scene_patch_rejected_readability\" | \"chart_scale_imbalance\" | \"provider_warning\" | \"provider_diagnostics_unavailable\";"
+      "type VideoWarningCode = \"scene_duration_adjusted\" | \"scene_omitted_unreadable\" | \"scene_omitted_for_closer\" | \"scene_patch_rejected_readability\" | \"chart_scale_imbalance\" | \"plan_incomplete\" | \"plan_missing_closer\" | \"provider_warning\" | \"provider_diagnostics_unavailable\";"
     ]
   }
 }

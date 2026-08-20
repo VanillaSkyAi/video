@@ -57,7 +57,7 @@ export async function runAcceptanceFixture({
     generate,
     selectAudio,
     capabilities: { templates: capabilities ?? [
-      "notification",
+      "media",
       ...fixture.replayParts
         .filter((part) => part.type === "scene.add")
         .map((part) => part.scene.templateId),

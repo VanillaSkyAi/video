@@ -47,6 +47,8 @@ export interface VideoStreamHandlerOptions {
   onComplete?: (summary: VideoGenerationSummary) => unknown;
   /** Drop malformed generated parts by default, or preserve fail-fast behavior. */
   invalidPartBehavior?: "drop" | "fail";
+  /** Require one explicit closer before a standard generated plan is considered complete. */
+  requireCloser?: boolean;
   /** Allow credentialed cross-origin requests from explicit allowedOrigins. */
   allowCredentials?: boolean;
   /** Templates and extensions implemented by this customer deployment. */
@@ -232,6 +234,7 @@ export function createVideoStreamHandler(options: VideoStreamHandlerOptions): Vi
           validateScene: options.validateScene,
           getTemplatePacing: options.getTemplatePacing,
           invalidPartBehavior: options.invalidPartBehavior ?? "drop",
+          requireCloser: options.requireCloser,
           onError: options.onError,
           onWarning: options.onWarning,
           onComplete: options.onComplete,

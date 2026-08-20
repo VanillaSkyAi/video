@@ -97,6 +97,9 @@ provider-neutral text-delta escape hatch.
 ### Types
 
 - `VideoHandlerOptions`
+- `MediaResolver`
+- `MediaResolverContext`
+- `ResolvedMedia`
 - `ServerTemplateRegistry`
 - `ServerTemplateMetadata`
 - `VideoFinishReason`
@@ -111,8 +114,16 @@ provider-neutral text-delta escape hatch.
   an intentionally non-public in-process/test handler.
 - `streamText` receives the generated system prompt, grounded user prompt, and
   the request `AbortSignal`.
+- `resolveMedia` is an optional application-owned resolver. It receives a
+  bounded semantic query only when configured, and returns an approved image
+  or video URL plus an optional poster before the scene is validated or sent
+  to the browser. Provider clients, keys, metadata, and unresolved queries
+  remain server-only.
 - `invalidPartBehavior` is `"drop" | "fail"`. A behavior selector is never
   named like a callback.
+- `requireCloser` defaults to `true` on `createVideoHandler`. The planner marks
+  one `scene.add` with `placement: "closer"`; the runtime reserves it and emits
+  it last. Specialized deterministic or test handlers may opt out explicitly.
 - `onWarning` receives safe typed warnings.
 - `onComplete` receives one server-only `VideoGenerationSummary` after an
   actual `response.complete`; errors and aborts do not invoke it.
@@ -141,6 +152,7 @@ provider-neutral text-delta escape hatch.
 
 - `UseVideoOptions`
 - `UseVideoResult`
+- `VideoPlaybackMode`
 - `VideoPlayerProps`
 - `VideoErrorOptions`
 
@@ -164,6 +176,12 @@ interface UseVideoResult {
 <VideoPlayer {...video.playerProps} />
 <VideoPlayer video={savedVideo} />
 ```
+
+Set `playbackMode="autoplay-after-interaction"` for chat feeds: the first
+soundtrack waits on a visible scene-one poster, and later streams on the same
+mounted player autoplay with sound after the first successful viewer start.
+`manual`, `muted-autoplay`, and `autoplay-with-sound` cover the other browser
+startup policies.
 
 Saved-video playback performs no generation request. `VideoPlayerBinding` and
 the internal reducer state are not public types.

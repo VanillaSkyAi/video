@@ -10,9 +10,10 @@ The 0.1 SDK does not provide narration, TTS, or speech synchronization.
 If a product needs spoken audio, the application must create and synchronize
 that experience outside this contract.
 
-Only send source URLs you trust. Resolve provider results before generation,
-pass approved assets through `suppliedMedia`, and preload the next scene's asset
-before it becomes active. Keep provider credentials on the server.
+Only send source URLs you trust. Pass known approved assets through
+`suppliedMedia`, or configure the server-only `resolveMedia` callback for
+planner-selected backgrounds. Preload the next scene's asset before it becomes
+active. Keep provider credentials on the server.
 
 Supplied URLs and data URIs are not copied into the LLM prompt. The model sees
 an optional pool of opaque HTTPS-shaped references plus safe descriptive
@@ -47,23 +48,81 @@ Keep the catalog and files in your application so you control caching,
 licensing, and deployment. The SDK continues to handle playback, timing,
 serialization, replay, and export from the supplied URL.
 
+## Start with sound
+
+Browsers block audible autoplay unless the viewer has already interacted with
+the page. For a sound-first experience, keep the branded generation intro
+visible and let the player's start control provide that interaction:
+
+```tsx
+<VideoPlayer
+  {...video.playerProps}
+  playbackMode="autoplay-after-interaction"
+/>
+```
+
+The generation cover immediately includes a centered **Play with sound**
+button. A click starts the soundtrack and holds that branded cover as a
+three-second generation intro while planning continues. Once both the intro
+and the first validated scene are ready, the generated timeline begins from
+time zero. The generation intro remains visible indefinitely if the viewer has
+not clicked yet, even when the complete generated video is already ready. The
+server keeps the generated first scene on screen for at least three more
+seconds when the duration budget permits. After that first successful sound start,
+replacement streams on the same mounted player autoplay the same generation
+intro with sound and fall back to a start control if the browser blocks them.
+
+When `VideoInput.opening` is supplied, its asset-free gradient `media` scene
+replaces the generic generation cover as soon as it is available. It remains
+as the static start poster until the viewer clicks, then begins the actual
+timeline with sound; there is no additional generic pre-roll before it.
+
+Use `playbackMode="manual"` to require the button on every run,
+`playbackMode="muted-autoplay"` for browser-safe muted autoplay, or
+`playbackMode="autoplay-with-sound"` to try audible autoplay immediately. The
+lower-level `autoPlay` and `startMuted` props remain available when no playback
+mode is set.
+
 ## Media providers
 
-VanillaSky is provider-independent. Resolve image or video searches in your
-server application before generation and pass the approved results through
-`suppliedMedia`. The built-in planner sees opaque references and safe metadata;
-it does not call a stock-media provider or turn `mediaKeyword` into a URL.
+VanillaSky is provider-independent. When `resolveMedia` is configured, the
+built-in planner may emit a bounded semantic query for later media-capable
+scenes. The SDK calls the application-owned resolver on the server, replaces
+the query with the approved URL, type, and optional poster, then validates the
+scene before emitting it. Without the callback, media intent stays hidden from
+the planner. The first accepted generated scene remains asset-free.
+
+```ts
+import { createVideoHandler } from "@vanillaskyai/video/server";
+
+createVideoHandler({
+  authorize: checkSession,
+  streamText: planWithYourModel,
+  resolveMedia: async (query, { preferredType, signal }) => {
+    const asset = await searchYourApprovedCatalog({ query, preferredType, signal });
+    return asset
+      ? { url: asset.url, type: asset.type, posterUrl: asset.posterUrl }
+      : null;
+  },
+});
+```
+
+The resolver query is 2–80 characters and at most eight words. Return `null`
+when no licensed, safe, relevant asset exists; media-capable templates fall
+back to the brand gradient when their schema permits it. The browser never
+receives `mediaKeyword`, provider keys, or raw provider metadata.
 
 `allowMediaUrl` is an authorization hook for applications with their own custom
 stream adapter. It validates a final URL; it does not search for, fetch, or
 resolve media. The default 0.1 path needs no callback because every planner URL
 must already be present in `suppliedMedia`.
 
-Do not expose provider keys to React, allow arbitrary planner URLs, or add a
-provider abstraction to the template API. Templates describe visual building
-blocks; the application owns media retrieval, caching, licensing, and delivery.
+Do not expose provider keys to React or allow arbitrary planner URLs. Templates
+describe visual building blocks; the application owns media retrieval,
+caching, licensing, and delivery.
 
-For Pexels, keep `PEXELS_API_KEY` on the server, search before generation, and
-pass only validated `images.pexels.com` or `videos.pexels.com` results through
-`suppliedMedia`. The application remains responsible for attribution, search,
-orientation filtering, MIME checks, timeouts, caching, and fallback behavior.
+For Pexels, keep `PEXELS_API_KEY` on the server and implement `resolveMedia`
+with the Pexels API. Return only validated `images.pexels.com` or
+`videos.pexels.com` results. The application remains responsible for
+attribution, search, orientation filtering, MIME checks, timeouts, caching,
+and fallback behavior.

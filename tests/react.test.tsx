@@ -115,7 +115,7 @@ describe("React renderer", () => {
     expect(changedMedia).toContain('data-scene-layer="incoming"');
   });
 
-  it("runs transitioned templates through their complete fixed-duration motion timeline", async () => {
+  it("runs body transitions through their timeline and holds the terminal poster pose", async () => {
     const { VideoFrame } = await import("../src/player/video-frame");
     const { createRenderTemplateRegistry, defineTemplate } = await import("../src/visual-system/catalog/internal");
     const probe = (id: string) => defineTemplate({
@@ -166,7 +166,7 @@ describe("React renderer", () => {
     expect(boundary).toContain('data-motion-progress="0.000"');
 
     expect(frame(8)).toContain('data-progress="0.500" data-motion-progress="0.500"');
-    expect(frame(10.1)).toContain('data-progress="0.850" data-motion-progress="0.850"');
+    expect(frame(10.1)).toContain('data-progress="0.850" data-motion-progress="0.700"');
     expect(frame(11)).toContain('data-progress="1.000" data-motion-progress="0.700"');
   });
 
@@ -310,7 +310,7 @@ describe("React renderer", () => {
     }
   });
 
-  it("preserves the full local timeline in first, middle, final, and single-scene positions", async () => {
+  it("preserves body-scene timelines while holding final and single scenes at their poster pose", async () => {
     const { VideoFrame } = await import("../src/player/video-frame");
     const { createRenderTemplateRegistry, defineTemplate } = await import("../src/visual-system/catalog/internal");
     const template = defineTemplate({
@@ -349,12 +349,16 @@ describe("React renderer", () => {
     expect(render(threeScenes, 10)).toContain('data-motion-progress="0.500"');
     expect(render(threeScenes, 3.4)).toContain('data-progress="0.850" data-motion-progress="0.850"');
     expect(render(threeScenes, 7.4)).toContain('data-progress="0.850" data-motion-progress="0.850"');
-    expect(render(threeScenes, 11.4)).toContain('data-progress="0.850" data-motion-progress="0.850"');
+    expect(render(threeScenes, 11.4)).toContain('data-progress="0.850" data-motion-progress="0.700"');
+    expect(render(threeScenes, 11.9)).toContain('data-progress="0.975" data-motion-progress="0.700"');
     expect(render(threeScenes, 3.9)).toContain('data-progress="0.975" data-motion-progress="0.975"');
     expect(render(threeScenes, 12)).toContain('data-progress="1.000" data-motion-progress="0.700"');
     const single = render([{ ...threeScenes[0], id: "single" }], 2);
     expect(single).toContain('data-progress="0.500"');
     expect(single).toContain('data-motion-progress="0.500"');
+    const singleHolding = render([{ ...threeScenes[0], id: "single" }], 3.9);
+    expect(singleHolding).toContain('data-progress="0.975"');
+    expect(singleHolding).toContain('data-motion-progress="0.700"');
     const singleAtEnd = render([{ ...threeScenes[0], id: "single" }], 4);
     expect(singleAtEnd).toContain('data-progress="1.000"');
     expect(singleAtEnd).toContain('data-motion-progress="0.700"');

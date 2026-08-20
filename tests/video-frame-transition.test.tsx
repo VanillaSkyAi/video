@@ -9,7 +9,7 @@ import { createRenderTemplateRegistry, defineTemplate } from "../src/visual-syst
 import { TEST_VIDEO_STYLE } from "./semantic-brand-fixture";
 
 describe("VideoFrame transition ownership", () => {
-  it("plays the complete final-scene lifecycle, then exposes its readable poster frame", () => {
+  it("holds the final scene's readable poster pose instead of playing an exit and snapping back", () => {
     const final = defineTemplate({
       id: "terminal-poster",
       usesGlobalTransition: true,
@@ -35,7 +35,7 @@ describe("VideoFrame transition ownership", () => {
     const props = { kit, config, width: 540, height: 960 };
     const view = render(createElement(VideoFrame, { ...props, time: 4.99 }));
     expect(view.container.querySelector("[data-progress]")?.getAttribute("data-progress")).toBe("0.998");
-    expect(view.container.querySelector("[data-motion-progress]")?.getAttribute("data-motion-progress")).toBe("0.998");
+    expect(view.container.querySelector("[data-motion-progress]")?.getAttribute("data-motion-progress")).toBe("0.700");
 
     view.rerender(createElement(VideoFrame, { ...props, time: 5 }));
     expect(view.container.querySelector("[data-progress]")?.getAttribute("data-progress")).toBe("1.000");
