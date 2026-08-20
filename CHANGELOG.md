@@ -4,19 +4,18 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
-<!-- Add release notes here before running release:prepare. -->
+<!-- Add release notes for the next version here. -->
 
-## 0.1.1-beta.1
+## 0.1.1
 
-### Patch Changes
+No runtime changes: the public API, behavior, and dependencies are identical to
+0.1.0. This release replaces the 0.1.1-beta line and moves `latest` onto a
+single, current version so the repository, npm, and vanillasky.ai agree.
 
-- 9c42eb7: Publish the customer-compatible beta through the read-only npm API comparison.
-
-## 0.1.1-beta.0
-
-### Patch Changes
-
-- 66e8e95: Enforce pre-1.0 compatibility intent with structurally parsed release evidence.
+- Simplified the release process to a version bump, an annotated tag on `main`,
+  and an OIDC publish. Changesets, the generated Version Packages branch, and
+  the npm-latest compatibility gate are removed; the tag job now packs a commit
+  CI has already verified instead of re-running the suite.
 
 ## 0.1.0
 

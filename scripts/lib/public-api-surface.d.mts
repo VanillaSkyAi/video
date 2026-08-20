@@ -25,4 +25,3 @@ export function createPublicApiSignatureReport(options: {
   support: string[];
 }>;
 
-export function assertPatchCompatibility(options: unknown): unknown;

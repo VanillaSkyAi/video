@@ -63,7 +63,7 @@ describe("frozen public API surface", () => {
     expect(existsSync(resolve(root, "scripts/lib/public-api-surface.mjs"))).toBe(true);
     expect(existsSync(resolve(root, "tests/fixtures/public-api-signatures.json"))).toBe(true);
     expect(manifest.scripts["verify:api"]).toBe("npm run build && node scripts/verify-public-api-surface.mjs");
-    expect(manifest.scripts["release:check"]).toContain("npm run verify:api");
+    expect(manifest.scripts["release:build"]).toBe("node scripts/release-build.mjs");
     expect(packedVerifier).toContain("verifyPublicApiSurface");
     expect(packedVerifier).toContain("public-api-signatures.json");
   });
@@ -74,25 +74,6 @@ describe("frozen public API surface", () => {
     expect(verifier).toContain('"react@18"');
     expect(verifier).toContain('"@types/react@18"');
     expect(verifier).toContain('"node_modules", "@vanillaskyai", "video"');
-  });
-
-  it("compares patch candidates with the published npm latest contract", () => {
-    const verifier = readFileSync(resolve(root, "scripts/verify-public-api-surface.mjs"), "utf8");
-    const workflow = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
-
-    expect(verifier).toContain("assertPatchCompatibility");
-    expect(verifier).toContain('"@vanillaskyai/video@latest"');
-    expect(verifier).toContain('"view", "@vanillaskyai/video@latest", "version", "--json"');
-    expect(verifier).toContain('const baselineSpecifier = `${packageName}@${baselineVersion}`');
-    expect(verifier).toContain("baselineManifest.version !== baselineVersion");
-    expect(verifier).not.toContain('"@vanillaskyai/video@latest", "react@18"');
-    expect(verifier).not.toContain("if (candidateVersion === baselineVersion)");
-    expect(verifier).toContain("createPublicApiSignatureReport");
-    expect(verifier).toContain("baselinePackageRoot");
-    expect(verifier).toContain("candidateVersion");
-    expect(verifier).toContain("VANILLASKY_COMPATIBILITY_BASE_SHA");
-    expect(workflow).toContain("fetch-depth: 0");
-    expect(workflow).toContain("VANILLASKY_COMPATIBILITY_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}");
   });
 
   it("documents the conservative limit of normalized signature comparison", () => {

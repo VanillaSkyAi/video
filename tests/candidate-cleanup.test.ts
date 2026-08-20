@@ -35,7 +35,6 @@ function sourceHits(markers: readonly string[]) {
 
 function unapprovedSourceHits(markers: readonly string[]) {
   const intentionalCutoverWarnings = new Set([
-    "tests/release-preflight.test.ts\0vanillasky-sdk",
     "tests/release-workflow.test.ts\0vanillasky-sdk",
     "tests/release-workflow.test.ts\0historical",
   ]);

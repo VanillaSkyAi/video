@@ -22,7 +22,7 @@ jobs:
   verify:
     needs: repository-identity
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
@@ -52,15 +52,15 @@ jobs:
       - name: Install the locked npm CLI
         run: npm install --global npm@11.17.0
       - run: npm ci
-      - run: npx playwright install chromium
 
+      # CI already ran lint, types, tests, and consumer verification on this
+      # commit; this step only packs it and proves tag/source/tarball agree.
       - name: Build release artifact
         id: artifact
         env:
           VANILLASKY_APPROVED_BRANCH: origin/main
-          VANILLASKY_RELEASE_MODE: tag
           VANILLASKY_RELEASE_OUTPUT_DIR: release-assets
-        run: npm run release:dry-run -- --ci
+        run: npm run release:build -- --ci
 
       - name: Upload verified release candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

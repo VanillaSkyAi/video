@@ -9,53 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  pr-safety:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install the locked npm CLI
-        run: npm install --global npm@11.17.0
-      - name: Verify generated tree before executing head package code
-        if: github.event_name == 'pull_request'
-        env:
-          CHANGESET_BASE_REF: ${{ github.event.pull_request.base.sha }}
-          CHANGESET_HEAD_REF: ${{ github.event.pull_request.head.sha }}
-          CHANGESET_HEAD_BRANCH: ${{ github.head_ref }}
-          CHANGESET_BASE_BRANCH: ${{ github.base_ref }}
-          CHANGESET_BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
-          CHANGESET_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-        run: |
-          if [[ "$CHANGESET_HEAD_BRANCH" == "changeset-release/main" \
-            && "$CHANGESET_BASE_BRANCH" == "main" \
-            && "$CHANGESET_HEAD_REPOSITORY" == "VanillaSkyAi/video" \
-            && "$CHANGESET_BASE_REPOSITORY" == "VanillaSkyAi/video" ]]; then
-            base_verifier="$RUNNER_TEMP/version-packages-base"
-            git worktree add --detach "$base_verifier" "$CHANGESET_BASE_REF"
-            (cd "$base_verifier" && npm ci --ignore-scripts)
-            CHANGESETS_CLI_PATH="$base_verifier/node_modules/@changesets/cli/bin.js" \
-              CHANGESETS_PARSE_PATH="$base_verifier/node_modules/@changesets/parse/dist/index.mjs" \
-              VERSION_PACKAGES_REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
-              node "$base_verifier/scripts/verify-version-packages-pr.mjs"
-          fi
-
   verify:
-    needs: pr-safety
-    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Require generated-tree safety gate
-        run: test "${{ needs.pr-safety.result }}" = "success"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -68,25 +25,6 @@ jobs:
       - name: Install the locked npm CLI
         run: npm install --global npm@11.17.0
       - run: npm ci
-      - name: Verify ordinary pull request changeset
-        if: github.event_name == 'pull_request'
-        env:
-          CHANGESET_BASE_REF: ${{ github.event.pull_request.base.sha }}
-          CHANGESET_HEAD_REF: ${{ github.event.pull_request.head.sha }}
-          CHANGESET_HEAD_BRANCH: ${{ github.head_ref }}
-          CHANGESET_BASE_BRANCH: ${{ github.base_ref }}
-          CHANGESET_BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
-          CHANGESET_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-        run: |
-          if [[ "$CHANGESET_HEAD_BRANCH" != "changeset-release/main" \
-            || "$CHANGESET_BASE_BRANCH" != "main" \
-            || "$CHANGESET_HEAD_REPOSITORY" != "VanillaSkyAi/video" \
-            || "$CHANGESET_BASE_REPOSITORY" != "VanillaSkyAi/video" ]]; then
-            npm run changeset:status -- --since "$CHANGESET_BASE_REF"
-            npm run changeset:check
-          else
-            echo "Canonical Version Packages tree passed the pr-safety gate."
-          fi
       - run: npm run registry:check
       - run: npm run lint
       - run: npm run typecheck
@@ -98,11 +36,8 @@ jobs:
       - run: npm pack --dry-run
 
   consumer-compatibility:
-    needs: pr-safety
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    env:
-      VANILLASKY_COMPATIBILITY_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -126,7 +61,6 @@ jobs:
       - run: npm run server-examples:typecheck
 
   provider-compatibility:
-    needs: pr-safety
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -142,12 +76,9 @@ jobs:
       - run: npm run verify:nextjs
 
   node-compatibility:
-    needs: pr-safety
     strategy:
       matrix:
         # The primary verify job covers Node 22.
-        # Node 20 runs all SDK/runtime tests; only pinned-Changesets CLI cases
-        # self-skip by its engine range and still run in required Node 22 verify.
         node: [20, 24]
     runs-on: ubuntu-latest
     timeout-minutes: 8
@@ -164,7 +95,6 @@ jobs:
       - run: npm run build
 
   react-compatibility:
-    needs: pr-safety
     strategy:
       matrix:
         # The primary verify job uses the locked React 19 dependency.
@@ -184,7 +114,6 @@ jobs:
       - run: npm test -- tests/react.test.tsx tests/player.test.tsx tests/template-kit.test.tsx tests/templates.test.tsx
 
   browser-compatibility:
-    needs: pr-safety
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07
