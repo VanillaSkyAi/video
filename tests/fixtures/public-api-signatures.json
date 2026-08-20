@@ -54,7 +54,15 @@
           "type"
         ],
         "declaration": [
-          "interface VideoInput {\n    input: string;\n    instructions?: string;\n    maxDurationSec?: number;\n    orientation?: VideoOrientation;\n    style?: VideoStyleOptions;\n    opening?: string;\n    brand?: VideoBrandInput;\n    personalization?: Record<string, unknown>;\n    suppliedMedia?: VideoSuppliedMedia[];\n    audio?: false | {\n        src: string;\n    };\n}"
+          "interface VideoInput {\n    input: string;\n    knowledgeMode?: VideoKnowledgeMode;\n    instructions?: string;\n    maxDurationSec?: number;\n    orientation?: VideoOrientation;\n    style?: VideoStyleOptions;\n    opening?: string;\n    brand?: VideoBrandInput;\n    personalization?: Record<string, unknown>;\n    suppliedMedia?: VideoSuppliedMedia[];\n    audio?: false | {\n        src: string;\n    };\n}"
+        ]
+      },
+      "VideoKnowledgeMode": {
+        "kinds": [
+          "type"
+        ],
+        "declaration": [
+          "type VideoKnowledgeMode = \"input-only\" | \"general\";"
         ]
       },
       "VideoOrientation": {
@@ -258,7 +266,7 @@
       "interface VideoEventDataMap {\n    \"response.start\": {\n        requestId: string;\n        format: {\n            orientation: VideoOrientation;\n        };\n        style: VideoStyle;\n        meta?: Video[\"meta\"];\n        capabilities?: VideoCapabilities;\n    };\n    \"audio.set\": {\n        audio: VideoAudio;\n    };\n    \"scene.add\": {\n        scene: VideoScene;\n        position: number;\n        revision: number;\n    };\n    \"scene.patch\": {\n        sceneId: string;\n        revision: number;\n        patch: Partial<Omit<VideoScene, \"id\" | \"templateId\">>;\n    };\n    \"asset.patch\": {\n        sceneId: string;\n        revision: number;\n        variables: Record<string, unknown>;\n    };\n    \"response.warning\": {\n        warning: VideoWarning;\n    };\n    \"response.complete\": {\n        finishReason: VideoFinishReason;\n        snapshot: Video;\n        checksum: string;\n    };\n    \"response.error\": {\n        error: {\n            code: string;\n            message: string;\n            recoverable: boolean;\n        };\n        terminal: boolean;\n        snapshot?: Video;\n    };\n    \"response.abort\": {\n        reason: string;\n        snapshot?: Video;\n    };\n}",
       "interface VideoEventEnvelope<TType extends string, TData> {\n    protocolVersion: typeof VIDEO_PROTOCOL_VERSION;\n    runId: string;\n    sequence: number;\n    eventId: string;\n    type: TType;\n    data: TData;\n}",
       "interface VideoGenerationContext {\n    request: VideoRequest;\n    systemPrompt: string;\n    userPrompt: string;\n    initialConfig: Video;\n    signal: AbortSignal;\n}",
-      "interface VideoInput {\n    input: string;\n    instructions?: string;\n    maxDurationSec?: number;\n    orientation?: VideoOrientation;\n    style?: VideoStyleOptions;\n    opening?: string;\n    brand?: VideoBrandInput;\n    personalization?: Record<string, unknown>;\n    suppliedMedia?: VideoSuppliedMedia[];\n    audio?: false | {\n        src: string;\n    };\n}",
+      "interface VideoInput {\n    input: string;\n    knowledgeMode?: VideoKnowledgeMode;\n    instructions?: string;\n    maxDurationSec?: number;\n    orientation?: VideoOrientation;\n    style?: VideoStyleOptions;\n    opening?: string;\n    brand?: VideoBrandInput;\n    personalization?: Record<string, unknown>;\n    suppliedMedia?: VideoSuppliedMedia[];\n    audio?: false | {\n        src: string;\n    };\n}",
       "interface VideoRequest {\n    protocolVersion: typeof VIDEO_PROTOCOL_VERSION;\n    requestId: string;\n    input: VideoInput;\n    capabilities?: VideoCapabilities;\n    resume?: VideoResumeCursor;\n}",
       "interface VideoResumeCursor {\n    runId: string;\n    afterSequence: number;\n}",
       "interface VideoScene {\n    id: string;\n    templateId: string;\n    variables: Record<string, unknown>;\n    textArchetype?: string;\n    backgroundEffect?: string;\n    timing: VideoTiming;\n}",
@@ -283,6 +291,7 @@
       "type VideoEvent = VideoCoreEvent | VideoExtensionEvent;",
       "type VideoExtensionEvent<TData = unknown> = VideoEventEnvelope<VideoExtensionEventType, TData>;",
       "type VideoExtensionEventType = `data.${string}`;",
+      "type VideoKnowledgeMode = \"input-only\" | \"general\";",
       "type VideoOrientation = \"portrait\" | \"landscape\";",
       "type VideoPlanner = (context: VideoGenerationContext) => AsyncIterable<VideoPlanPart>;",
       "type VideoPlanPart = {\n    type: \"scene.add\";\n    placement?: \"closer\";\n    scene: VideoScene;\n} | {\n    type: \"scene.patch\";\n    sceneId: string;\n    patch: Partial<Omit<VideoScene, \"id\" | \"templateId\">>;\n} | {\n    type: \"asset.patch\";\n    sceneId: string;\n    variables: Record<string, unknown>;\n} | {\n    type: \"plan.complete\";\n    finishReason?: \"stop\" | \"length\" | \"content-filter\" | \"other\";\n} | {\n    type: \"plan.error\";\n    error: {\n        message: string;\n        code?: string;\n        recoverable?: boolean;\n    };\n};",
@@ -379,7 +388,7 @@
       "interface VideoCapabilities {\n    templates?: string[];\n    extensions?: string[];\n}",
       "interface VideoEventDataMap {\n    \"response.start\": {\n        requestId: string;\n        format: {\n            orientation: VideoOrientation;\n        };\n        style: VideoStyle;\n        meta?: Video[\"meta\"];\n        capabilities?: VideoCapabilities;\n    };\n    \"audio.set\": {\n        audio: VideoAudio;\n    };\n    \"scene.add\": {\n        scene: VideoScene;\n        position: number;\n        revision: number;\n    };\n    \"scene.patch\": {\n        sceneId: string;\n        revision: number;\n        patch: Partial<Omit<VideoScene, \"id\" | \"templateId\">>;\n    };\n    \"asset.patch\": {\n        sceneId: string;\n        revision: number;\n        variables: Record<string, unknown>;\n    };\n    \"response.warning\": {\n        warning: VideoWarning;\n    };\n    \"response.complete\": {\n        finishReason: VideoFinishReason;\n        snapshot: Video;\n        checksum: string;\n    };\n    \"response.error\": {\n        error: {\n            code: string;\n            message: string;\n            recoverable: boolean;\n        };\n        terminal: boolean;\n        snapshot?: Video;\n    };\n    \"response.abort\": {\n        reason: string;\n        snapshot?: Video;\n    };\n}",
       "interface VideoEventEnvelope<TType extends string, TData> {\n    protocolVersion: typeof VIDEO_PROTOCOL_VERSION;\n    runId: string;\n    sequence: number;\n    eventId: string;\n    type: TType;\n    data: TData;\n}",
-      "interface VideoInput {\n    input: string;\n    instructions?: string;\n    maxDurationSec?: number;\n    orientation?: VideoOrientation;\n    style?: VideoStyleOptions;\n    opening?: string;\n    brand?: VideoBrandInput;\n    personalization?: Record<string, unknown>;\n    suppliedMedia?: VideoSuppliedMedia[];\n    audio?: false | {\n        src: string;\n    };\n}",
+      "interface VideoInput {\n    input: string;\n    knowledgeMode?: VideoKnowledgeMode;\n    instructions?: string;\n    maxDurationSec?: number;\n    orientation?: VideoOrientation;\n    style?: VideoStyleOptions;\n    opening?: string;\n    brand?: VideoBrandInput;\n    personalization?: Record<string, unknown>;\n    suppliedMedia?: VideoSuppliedMedia[];\n    audio?: false | {\n        src: string;\n    };\n}",
       "interface VideoPlayerSharedProps {\n    playbackMode?: VideoPlaybackMode;\n    autoPlay?: boolean;\n    startMuted?: boolean;\n    width?: number;\n    orientation?: VideoOrientation | \"auto\";\n    responsiveBreakpoint?: number;\n    className?: string;\n    style?: CSSProperties;\n    ariaLabel?: string;\n    onComplete?: (video: Video) => void;\n    onError?: (error: Error) => void;\n}",
       "interface VideoScene {\n    id: string;\n    templateId: string;\n    variables: Record<string, unknown>;\n    textArchetype?: string;\n    backgroundEffect?: string;\n    timing: VideoTiming;\n}",
       "interface VideoStyle {\n    brand: VideoBrand;\n    preset?: string;\n    defaultBackgroundEffect?: string;\n    defaultTextArchetype?: string;\n    defaultTransition?: string;\n    density?: string;\n    motion?: string;\n}",
@@ -399,6 +408,7 @@
       "type VideoExtensionEvent<TData = unknown> = VideoEventEnvelope<VideoExtensionEventType, TData>;",
       "type VideoExtensionEventType = `data.${string}`;",
       "type VideoFinishReason = \"stop\" | \"length\" | \"content-filter\" | \"error\" | \"other\";",
+      "type VideoKnowledgeMode = \"input-only\" | \"general\";",
       "type VideoOrientation = \"portrait\" | \"landscape\";",
       "type VideoStatus = \"idle\" | \"streaming\" | \"complete\" | \"error\" | \"aborted\";",
       "type VideoWarningCategory = \"validation\" | \"readability\" | \"grounding\" | \"provider\" | \"media\" | \"protocol\";",
@@ -614,7 +624,7 @@
       "interface VideoBrandColors {\n    primary: string;\n    secondary: string;\n    foreground: string;\n    surface: string;\n    surfaceElevated: string;\n    muted: string;\n}",
       "interface VideoBrandInput {\n    name?: string;\n    logoUrl?: string;\n    font?: string;\n    scriptFont?: string;\n    background?: VideoBackgroundInput;\n    colors?: Partial<VideoBrandColors>;\n}",
       "interface VideoGenerationFixture {\n    input: VideoInput;\n    parts: readonly MockVideoStreamPart[];\n}",
-      "interface VideoInput {\n    input: string;\n    instructions?: string;\n    maxDurationSec?: number;\n    orientation?: VideoOrientation;\n    style?: VideoStyleOptions;\n    opening?: string;\n    brand?: VideoBrandInput;\n    personalization?: Record<string, unknown>;\n    suppliedMedia?: VideoSuppliedMedia[];\n    audio?: false | {\n        src: string;\n    };\n}",
+      "interface VideoInput {\n    input: string;\n    knowledgeMode?: VideoKnowledgeMode;\n    instructions?: string;\n    maxDurationSec?: number;\n    orientation?: VideoOrientation;\n    style?: VideoStyleOptions;\n    opening?: string;\n    brand?: VideoBrandInput;\n    personalization?: Record<string, unknown>;\n    suppliedMedia?: VideoSuppliedMedia[];\n    audio?: false | {\n        src: string;\n    };\n}",
       "interface VideoScene {\n    id: string;\n    templateId: string;\n    variables: Record<string, unknown>;\n    textArchetype?: string;\n    backgroundEffect?: string;\n    timing: VideoTiming;\n}",
       "interface VideoStyle {\n    brand: VideoBrand;\n    preset?: string;\n    defaultBackgroundEffect?: string;\n    defaultTextArchetype?: string;\n    defaultTransition?: string;\n    density?: string;\n    motion?: string;\n}",
       "interface VideoStyleOptions {\n    density?: \"airy\" | \"normal\" | \"packed\";\n    motion?: \"calm\" | \"normal\" | \"punchy\";\n    textArchetype?: \"subtle\" | \"typewriter\" | \"wordStagger\" | \"slam\" | \"cinematic\" | \"heroWord\";\n    backgroundEffect?: \"static\" | \"slow-zoom-in\" | \"slow-zoom-out\" | \"ken-burns\" | \"drift\" | \"pulse\" | \"breathe\" | \"slow-tilt\" | \"camera-shake\";\n}",
@@ -628,6 +638,7 @@
       "type VideoBackgroundInput = VideoBackgroundPreset | {\n    color: string;\n} | {\n    colors: [\n        string,\n        string\n    ];\n};",
       "type VideoBackgroundPreset = \"cosmic\" | \"horizon\" | \"twilight\" | \"meadow\" | \"velvet\" | \"flamingo\" | \"peach\" | \"saffron\" | \"black\" | \"midnight\" | \"aubergine\" | \"coal\" | \"navy\";",
       "type VideoFinishReason = \"stop\" | \"length\" | \"content-filter\" | \"error\" | \"other\";",
+      "type VideoKnowledgeMode = \"input-only\" | \"general\";",
       "type VideoOrientation = \"portrait\" | \"landscape\";",
       "type VideoWarningCategory = \"validation\" | \"readability\" | \"grounding\" | \"provider\" | \"media\" | \"protocol\";",
       "type VideoWarningCode = \"scene_duration_adjusted\" | \"scene_omitted_unreadable\" | \"scene_omitted_for_closer\" | \"scene_patch_rejected_readability\" | \"chart_scale_imbalance\" | \"plan_incomplete\" | \"plan_missing_closer\" | \"provider_warning\" | \"provider_diagnostics_unavailable\";"

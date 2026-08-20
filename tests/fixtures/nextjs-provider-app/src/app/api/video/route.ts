@@ -10,7 +10,7 @@ const handle = createVideoHandler({
   // This local-only bypass makes the copied quickstart runnable in development.
   // Replace it with your application's session check before deploying.
   authorize: (request) => {
-    if (process.env.NODE_ENV !== "development") return false;
+    if (process.env.VANILLASKY_LOCAL_DEMO !== "1") return false;
     const hostname = new URL(request.url).hostname;
     return hostname === "localhost" || hostname === "127.0.0.1";
   },

@@ -33,9 +33,15 @@ describe("generated-part resilience", () => {
     const events = [];
     for await (const event of run.stream) events.push(event);
     expect((await run.result).status).toBe("complete");
-    expect((await run.result).config?.scenes.map(({ id }) => id)).toEqual(["one", "two"]);
+    expect((await run.result).config?.scenes.map(({ id }) => id))
+      .toEqual(["supplied-opening", "one", "two"]);
     expect(reported).toEqual(["private variable detail"]);
-    expect(contexts).toEqual([[], ["one"], ["one"]]);
+    expect(contexts).toEqual([
+      [],
+      ["supplied-opening"],
+      ["supplied-opening", "one"],
+      ["supplied-opening", "one"],
+    ]);
     expect(JSON.stringify(events)).not.toContain("private variable detail");
     expect(events).toContainEqual(expect.objectContaining({
       type: "response.error",
@@ -46,7 +52,7 @@ describe("generated-part resilience", () => {
   it("preserves explicit fail-fast behavior", async () => {
     const run = createVideo({ input: "facts" }, {
       invalidPartBehavior: "fail",
-      validateScene: () => { throw new Error("rejected"); },
+      validateScene: (scene) => { if (scene.id === "bad") throw new Error("rejected"); },
       generate: async function* () { yield validScene("bad"); },
     });
     const events = [];
@@ -100,7 +106,9 @@ describe("generated-part resilience", () => {
       authorize: "none",
       heartbeatMs: false,
       invalidPartBehavior: "fail",
-      validateScene: () => { throw new Error("private rejection"); },
+      validateScene: (scene) => {
+        if (scene.id === "bad") throw new Error("private rejection");
+      },
       generate: async function* () { yield validScene("bad"); },
     });
     const body = createVideoRequest({ input: "facts" }, { requestId: "request-fail" });
@@ -126,7 +134,7 @@ describe("generated-part resilience", () => {
     const events = [];
     for await (const event of decodeVideoSse(response.body!)) events.push(event);
     expect(events.map(({ type }) => type)).toEqual([
-      "response.start", "response.error", "scene.add", "response.complete",
+      "response.start", "scene.add", "response.error", "scene.add", "response.complete",
     ]);
   });
 });
@@ -152,7 +160,9 @@ describe("remote consumption and credentials", () => {
     await expect(run.result).resolves.toMatchObject({ status: "complete" });
     const events = [];
     for await (const event of run.stream) events.push(event);
-    expect(events.map(({ type }) => type)).toEqual(["response.start", "scene.add", "response.complete"]);
+    expect(events.map(({ type }) => type)).toEqual([
+      "response.start", "scene.add", "scene.add", "response.complete",
+    ]);
     expect(credentials).toBe("include");
   });
 
@@ -195,7 +205,9 @@ describe("local consumption lifecycle", () => {
     for await (const event of run.stream) first.push(event);
     const replay = [];
     for await (const event of run.stream) replay.push(event);
-    expect(first.map(({ type }) => type)).toEqual(["response.start", "scene.add", "response.complete"]);
+    expect(first.map(({ type }) => type)).toEqual([
+      "response.start", "scene.add", "scene.add", "response.complete",
+    ]);
     expect(replay).toEqual(first);
   });
 

@@ -50,7 +50,7 @@ const model = openai(process.env.OPENAI_MODEL ?? "gpt-4.1");
 const handle = createVideoHandler({
   // Local development only. Replace with your session check before deploying.
   authorize: (request) => {
-    if (process.env.NODE_ENV !== "development") return false;
+    if (process.env.VANILLASKY_LOCAL_DEMO !== "1") return false;
     const hostname = new URL(request.url).hostname;
     return hostname === "localhost" || hostname === "127.0.0.1";
   },
@@ -66,7 +66,8 @@ export const POST = handle;
 export const OPTIONS = handle;
 ```
 
-The local authorization denies every production request. Replace it before
+The packaged development command supplies the local marker only to `next dev`,
+so production builds and `next start` deny every request. Replace it before
 deploying. The model can come from OpenAI, Anthropic, an AI SDK registry or
 gateway, or any compatible streaming adapter.
 
@@ -109,7 +110,7 @@ A copy-and-run app is in
 
 ## Shape the response
 
-Start with `input`, the complete factual boundary for the video:
+Start with `input`. It is the complete factual boundary by default:
 
 ```ts
 video.generate({
@@ -124,6 +125,9 @@ video.generate({
 ```
 
 - Put claims, numbers, names, dates, and quotations in `input`.
+- Keep `knowledgeMode: "input-only"` (the default) for source-grounded video,
+  or choose `knowledgeMode: "general"` when the model should answer a question
+  or develop content with stable general knowledge.
 - Put presentation direction in `instructions`.
 - Put viewer or account context in `personalization`.
 - Add brand, approved media, soundtrack audio, or a smaller template set only

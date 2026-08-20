@@ -4,6 +4,7 @@ export type {
   VideoBackground,
   VideoBrand,
   VideoInput,
+  VideoKnowledgeMode,
   VideoOrientation,
   VideoScene,
   VideoStyle,

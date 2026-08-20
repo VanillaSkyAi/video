@@ -21,8 +21,11 @@ or export pipeline when an encoded file is required.
   curated set of articles, metrics, events, notes, or an AI answer. It may be
   short, but the planner is designed to distill larger sources into a concise
   video rather than represent every fact;
+- `knowledgeMode`: `input-only` by default, or `general` when stable model
+  knowledge may supplement the request;
 - `instructions`: optional creative direction that cannot override facts;
-- `opening`: optional copy for a deterministic opening that can play immediately;
+- `opening`: optional custom copy for the deterministic opening; omission uses
+  `Creating your video...`;
 - `personalization`: application-defined fields such as name, role, account,
   period, goal, or onboarding partner;
 - `brand`: an optional background preset plus name, logo, font, surfaces, and

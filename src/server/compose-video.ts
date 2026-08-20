@@ -35,6 +35,25 @@ import type {
 } from "./lifecycle.js";
 import { attachGenerationLifecycleSink } from "./lifecycle.js";
 
+const DEFAULT_OPENING_TEXT = "Creating your video...";
+
+function resolveVideoInput(input: VideoInput): VideoInput {
+  return {
+    ...input,
+    opening: input.opening?.trim() || DEFAULT_OPENING_TEXT,
+  };
+}
+
+function resolveStreamCapabilities(
+  capabilities: CreateVideoOptions["capabilities"],
+): CreateVideoOptions["capabilities"] {
+  if (capabilities?.templates == null) return capabilities;
+  return {
+    ...capabilities,
+    templates: [...new Set(["media", ...capabilities.templates])],
+  };
+}
+
 function invokeIsolated<T>(callback: ((value: T) => unknown) | undefined, value: T): void {
   if (!callback) return;
   try {
@@ -135,6 +154,9 @@ function buildInitialConfig(
 
 function validateInput(input: VideoInput): void {
   if (!input.input.trim()) throw new Error("Video response input is required");
+  if (input.knowledgeMode != null && input.knowledgeMode !== "input-only" && input.knowledgeMode !== "general") {
+    throw new Error("Video response knowledge mode must be input-only or general");
+  }
   if (input.maxDurationSec != null &&
     (!Number.isFinite(input.maxDurationSec) || input.maxDurationSec < 5 || input.maxDurationSec > 120)) {
     throw new Error("Video response maximum duration must be between 5 and 120 seconds");
@@ -247,14 +269,12 @@ function createSceneQualityWarnings(scene: VideoScene): VideoWarning[] {
 }
 
 export function createVideo(
-  input: VideoInput,
+  rawInput: VideoInput,
   options: CreateVideoOptions,
 ): VideoRun {
-  validateInput(input);
-  if (input.opening?.trim() && options.capabilities?.templates != null &&
-    !options.capabilities.templates.includes("media")) {
-    throw new Error("Scene template media was not negotiated");
-  }
+  validateInput(rawInput);
+  const usesDefaultOpening = rawInput.opening == null;
+  const input = resolveVideoInput(rawInput);
   const requestId = options.requestId ?? createId("request");
   const runId = options.runId ?? createId("run");
   const request = createVideoRequest(input, {
@@ -375,7 +395,7 @@ export function createVideo(
         format: { orientation: initialConfig.orientation ?? "portrait" },
         style: initialConfig.style,
         meta: initialConfig.meta,
-        capabilities: options.capabilities,
+        capabilities: resolveStreamCapabilities(options.capabilities),
       }));
       if (initialConfig.audio) yield emit(events.create("audio.set", { audio: initialConfig.audio }));
       for (const warning of initial.warnings) {
@@ -390,7 +410,7 @@ export function createVideo(
       }
 
       const systemPrompt = options.systemPrompt ??
-        (await import("./prompts/system-prompt.js")).DEFAULT_VIDEO_SYSTEM_PROMPT;
+        (await import("./prompts/system-prompt.js")).createVideoSystemPrompt(input.knowledgeMode);
       const context = { request, systemPrompt, userPrompt, initialConfig, signal: controller.signal };
       attachGenerationLifecycleSink(context, lifecycle);
       for await (const untrustedPart of options.generate(context)) {
@@ -749,7 +769,9 @@ export function createVideo(
           warning: createIncompletePlanWarning(),
         }));
       }
-      if (!state.config?.scenes.length) throw new Error("The planner completed without adding a scene");
+      if (generatedSceneCount === 0 && usesDefaultOpening) {
+        throw new Error("The planner completed without adding a scene");
+      }
       // The documented persistence boundary must accept every completed value.
       // Validate and detach the terminal snapshot before it reaches SSE.
       const snapshot = parseVideo(state.config);

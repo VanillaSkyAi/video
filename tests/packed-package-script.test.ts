@@ -9,7 +9,8 @@ describe("packed package verification", () => {
     expect(script).toContain('join(serverConsumer, "root.mjs")');
     expect(script).toContain("VideoValidationError,getVideoDuration,parseVideo");
     expect(script).toContain('schemaVersion: "0.1"');
-    expect(script).toContain("fnv1a32:6e2a7da8");
+    expect(script).toContain("fnv1a32:1f617d38");
+    expect(script).toContain("Packed terminal snapshot lost its default opening");
     expect(script).toContain('pathname === "/api/video"');
     expect(script).toContain("generationRequests !== 0");
     expect(script).toContain("selectedArtifact.integrity");

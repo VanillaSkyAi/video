@@ -108,6 +108,7 @@ export function parseVideoRequest(value: unknown): VideoRequest {
   const input = record(request.input, "request.input");
   allowedKeys(input, [
     "input",
+    "knowledgeMode",
     "instructions",
     "maxDurationSec",
     "orientation",
@@ -119,6 +120,14 @@ export function parseVideoRequest(value: unknown): VideoRequest {
     "audio",
   ], "request.input");
   string(input.input, "request.input.input");
+  if (input.knowledgeMode != null) {
+    enumValue(
+      input.knowledgeMode,
+      ["input-only", "general"],
+      "input-only or general",
+      "request.input.knowledgeMode",
+    );
+  }
   if (input.instructions != null) string(input.instructions, "request.input.instructions");
   if (input.maxDurationSec != null) {
     numberBetween(input.maxDurationSec, 5, 120, "request.input.maxDurationSec");

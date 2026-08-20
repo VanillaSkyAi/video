@@ -62,6 +62,7 @@ export function resolveSuppliedMediaPlanPart(part: VideoPlanPart, input: VideoIn
 export function buildVideoUserPrompt(input: VideoInput, openingDurationSec = 0): string {
   return [
     "Compose a video response from the structured customer input below.",
+    `Knowledge mode: ${input.knowledgeMode ?? "input-only"}.`,
     `Maximum duration: ${input.maxDurationSec ?? 30} seconds, including the supplied opening.`,
     input.opening?.trim()
       ? `The host has already added the opening scene, which consumes ${openingDurationSec} seconds. Continue after it and do not repeat or rewrite it.`
@@ -69,10 +70,10 @@ export function buildVideoUserPrompt(input: VideoInput, openingDurationSec = 0):
     "The first generated body scene must be fully playable without external media. Use a content-fit text, data, comparison, list, or device-free template with no media URL or keyword.",
     "Never use media, ctaMedia, or reaction as the first generated body template, even with mediaType=gradient. Choose a non-media template first.",
     "Add that scene before resolving any stock or supplied asset. Media belongs on later body scenes and must arrive without blocking scene additions.",
-    "The raw input is the complete factual boundary. Do not add outside claims.",
+    "Use only claims supported by the factual basis permitted by the trusted system prompt.",
     "Select the most decision-relevant grounded takeaways that fit the duration; represent each selected takeaway once before completing the response.",
     "For a long source, summarize instead of attempting to represent every fact, unless the creative instructions explicitly request complete fact coverage that fits the duration.",
-    "Preserve exact wording and numbers for the takeaways you select. Preserve qualifiers, units, denominators, ranges, and comparison direction; for example, do not shorten 4.8 out of 5 to 4.8.",
+    "When selecting claims from the raw input, preserve their exact wording and numbers. Preserve qualifiers, units, denominators, ranges, and comparison direction; for example, do not shorten 4.8 out of 5 to 4.8.",
     "Choose the scene count from the distinct grounded material and the duration budget. Use fewer scenes for sparse input; continue beyond five when rich input warrants it and timing allows.",
     "If the creative instructions explicitly require one separate scene per named item, release, section, or list entry, do not merge, group, or omit those required items. Keep related required scenes adjacent in a coherent progression while preserving each item as its own scene.",
     "Before emitting, verify that the explicitly requested structure can fit readably within the maximum duration. If it cannot, preserve readability and the requested separation for the scenes that fit, then finish with plan.complete using finishReason length rather than silently changing the structure.",

@@ -27,7 +27,7 @@ const model = openai(process.env.OPENAI_MODEL ?? "gpt-4.1");
 const handle = createVideoHandler({
   // Local development only. Replace with your session check before deploying.
   authorize: (request) => {
-    if (process.env.NODE_ENV !== "development") return false;
+    if (process.env.VANILLASKY_LOCAL_DEMO !== "1") return false;
     const hostname = new URL(request.url).hostname;
     return hostname === "localhost" || hostname === "127.0.0.1";
   },
@@ -42,6 +42,9 @@ const handle = createVideoHandler({
 export const POST = handle;
 export const OPTIONS = handle;
 ```
+
+The packaged `npm run dev` command supplies this non-secret marker only to
+`next dev`. Production builds and `next start` never receive it.
 
 Create a Client Component:
 

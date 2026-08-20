@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "next dev",
+    "dev": "cross-env VANILLASKY_LOCAL_DEMO=1 next dev",
     "build": "next build",
     "start": "next start"
   },
@@ -19,6 +19,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "10.1.0",
     "typescript": "^5.9.3"
   }
 }

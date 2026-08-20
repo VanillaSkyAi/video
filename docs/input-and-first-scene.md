@@ -9,6 +9,7 @@ import type { VideoInput } from "@vanillaskyai/video";
 
 const input: VideoInput = {
   input: "Joris completed 142 customer conversations in Q2.",
+  knowledgeMode: "input-only",
   instructions: "Celebrate the result. Never alter a metric.",
   opening: "Joris, your Q2 recap is ready.",
   personalization: { firstName: "Joris", period: "Q2" },
@@ -22,18 +23,24 @@ const input: VideoInput = {
 
 ## Raw source
 
-Put every fact the response may claim in `input`. Use plain text, compact JSON, or a server-produced digest. Include units, periods, comparison bases, and provenance identifiers where ambiguity is possible. Keep creative direction in `instructions`; it may change emphasis and tone but cannot expand the factual boundary.
+In the default `input-only` mode, put every fact the response may claim in
+`input`. Use plain text, compact JSON, or a server-produced digest. Include
+units, periods, comparison bases, and provenance identifiers where ambiguity
+is possible. Choose `knowledgeMode: "general"` only when the model should use
+stable general knowledge to answer a question or develop content. Creative
+direction in `instructions` never changes that setting.
 
 Bound request bytes and reject secret-shaped fields on the server. Do not pass provider keys, authorization headers, internal prompt fragments, or storage credentials as source material.
 
 ## Opening
 
-When supplied, `opening` becomes a deterministic `media` scene emitted before
-provider work. It contains only the supplied sentence and explicitly uses the
-brand gradient without stock media. The SDK requests a three-second opening,
-then applies its normal readability and overall-duration budget. It owns the
-scene ID, template, variables, and timing so callers only provide the copy. It
-should:
+`opening` becomes a deterministic `media` scene emitted before provider work.
+When callers omit it, the SDK uses `Creating your video...`; a supplied value
+replaces that fallback. The scene contains only that sentence and explicitly
+uses the brand gradient without stock media. The SDK requests a three-second
+opening, then applies its normal readability and overall-duration budget. It
+owns the scene ID, template, variables, and timing so callers only provide
+optional custom copy. That copy should:
 
 - be personal or situational enough to feel intentional;
 - require no network media lookup;
@@ -41,4 +48,5 @@ should:
 - be one concise sentence that fits comfortably in both supported orientations;
 - be part of the final story, not a spinner disguised as a scene.
 
-Omit `opening` when the generated story should begin with its first planned scene.
+The opening is runtime-owned, so it remains available even when `templateIds`
+does not let the planner select `media` for generated body scenes.

@@ -88,7 +88,7 @@ export function createVideoHandler(
       approveUrl,
       isOpeningReady: (input) => openingReadyInputs.has(input),
     }),
-    systemPrompt: ({ capabilities }) => {
+    systemPrompt: ({ request, capabilities }) => {
       const selectedIds = capabilities?.templates == null
         ? undefined
         : new Set(capabilities.templates);
@@ -98,6 +98,7 @@ export function createVideoHandler(
       return createTemplateSystemPrompt({
         kit: { listTemplateMetadata: () => selectedTemplates },
         basePrompt,
+        knowledgeMode: request.input.knowledgeMode,
         mediaResolverAvailable: resolveMedia != null,
       });
     },
