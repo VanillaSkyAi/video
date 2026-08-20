@@ -59,6 +59,10 @@ describe("release npm execution guard", () => {
         FAKE_NPM_ARGV_LOG: argvLog,
       });
       execFileSync("npm", ["run", "build"], { env: environment });
+      runNestedNpm(invoker, ["view", "@vanillaskyai/video@latest", "version", "--json"], {
+        PATH: guard.environment.PATH,
+        FAKE_NPM_ARGV_LOG: argvLog,
+      });
       runNestedNpm(invoker, [
         "exec", "--yes", "create-vite@9.1.2", "--", "video-demo", "--no-interactive", "--template", "react-ts",
       ], {
@@ -73,6 +77,7 @@ describe("release npm execution guard", () => {
       expect(readFileSync(argvLog, "utf8").trim().split("\n").map((line) => JSON.parse(line))).toEqual([
         ["--version"],
         ["run", "build"],
+        ["view", "@vanillaskyai/video@latest", "version", "--json"],
         ["exec", "--yes", "create-vite@9.1.2", "--", "video-demo", "--no-interactive", "--template", "react-ts"],
         ["-s", "pack", "--json"],
       ]);

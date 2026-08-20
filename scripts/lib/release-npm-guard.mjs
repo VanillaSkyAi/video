@@ -8,7 +8,7 @@ function defaultNpmExecPath() {
 }
 
 export function parseReleaseNpmInvocation(args) {
-  const allowedCommands = new Set(["audit", "install", "pack", "run"]);
+  const allowedCommands = new Set(["audit", "install", "pack", "run", "view"]);
   const booleanOptions = new Set(["--silent", "-s"]);
   const logLevels = new Set(["silent", "error", "warn", "notice", "http", "info", "verbose", "silly"]);
   let index = 0;
