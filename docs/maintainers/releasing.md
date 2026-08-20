@@ -15,6 +15,13 @@ The current automation is intentionally scoped to the `0.x` public beta line:
 before a stable `1.0.0`, remove the beta-only release-note and compatibility
 checks in a separately reviewed change.
 
+Changesets records the release intent and summary with each pull request. This
+governance step does not yet replace the explicit candidate preparation and
+publishing process below. Package-affecting pull requests name
+`@vanillaskyai/video` with a `patch`, `minor`, or `major` bump; repository-only
+changes use an empty Changeset. Generated `changeset-release/*` Version
+Packages branches are exempt because they consume the pending files.
+
 ## Before creating a release tag
 
 `VanillaSkyAi/video` is the canonical repository. npm publishing uses the

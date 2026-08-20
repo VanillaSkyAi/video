@@ -88,6 +88,12 @@ installed tarball. Stable releases require package, tag, changelog, artifact,
 and public-site coherence. The site owns its private adoption workflow; keep
 its automation and credentials out of this public SDK repository.
 
+Every ordinary pull request must add a Changeset. Package-affecting work names
+`@vanillaskyai/video` with a `patch`, `minor`, or `major` bump; repository-only
+tooling, tests, workflows, governance, and maintainer documentation use an
+empty Changeset. Generated `changeset-release/*` Version Packages branches are
+exempt because they consume pending Changesets.
+
 Never publish, tag, create a release, move dist-tags, modify production secrets,
 or deploy as an implicit side effect of a local verification task.
 
