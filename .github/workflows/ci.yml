@@ -29,9 +29,25 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           CHANGESET_BASE_REF: ${{ github.event.pull_request.base.sha }}
+          CHANGESET_HEAD_REF: ${{ github.event.pull_request.head.sha }}
+          CHANGESET_HEAD_BRANCH: ${{ github.head_ref }}
+          CHANGESET_BASE_BRANCH: ${{ github.base_ref }}
+          CHANGESET_BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
+          CHANGESET_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
         run: |
-          npm run changeset:status -- --since "$CHANGESET_BASE_REF"
-          npm run changeset:check
+          if [[ "$CHANGESET_HEAD_BRANCH" == "changeset-release/main" \
+            && "$CHANGESET_BASE_BRANCH" == "main" \
+            && "$CHANGESET_HEAD_REPOSITORY" == "VanillaSkyAi/video" \
+            && "$CHANGESET_BASE_REPOSITORY" == "VanillaSkyAi/video" ]]; then
+            base_verifier="$RUNNER_TEMP/version-packages-base"
+            git worktree add --detach "$base_verifier" "$CHANGESET_BASE_REF"
+            CHANGESETS_CLI_PATH="$GITHUB_WORKSPACE/node_modules/@changesets/cli/bin.js" \
+              VERSION_PACKAGES_REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
+              node "$base_verifier/scripts/verify-version-packages-pr.mjs"
+          else
+            npm run changeset:status -- --since "$CHANGESET_BASE_REF"
+            npm run changeset:check
+          fi
       - run: npm run registry:check
       - run: npm run lint
       - run: npm run typecheck

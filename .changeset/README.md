@@ -5,13 +5,15 @@ the code. Run `npm run changeset` for a package change, or
 `npm run changeset -- --empty` for repository-only tooling and documentation.
 
 Package changes must name `@vanillaskyai/video` and choose `patch`, `minor`, or
-`major`. No branch is currently exempt. A future Version Packages generator
-must add its narrow exemption together with canonical repository, exact branch,
-and GitHub Actions bot provenance checks.
+`major`. The only exception is the generated `changeset-release/main` Version
+Packages branch. CI accepts that branch only from `VanillaSkyAi/video` into its
+own `main`, with the exact GitHub Actions bot commit identity and a tree that it
+reproduces byte-for-byte from the pull request's exact base commit. A copied
+branch name, fork, stale base, extra commit, or edited generated file fails.
 
 Do not modify, rename, or delete a pending Changeset already owned by `main`.
-The existing `release:prepare` command does not consume pending records; the
-Version Packages lifecycle pull request must consume them before a release.
+The verified Version Packages branch is the only path allowed to consume those
+records.
 
 Start the body with a one-line summary. Put any longer explanation after a
 blank line so the generated changelog keeps a readable summary bullet.

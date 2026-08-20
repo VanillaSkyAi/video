@@ -331,9 +331,12 @@ ${body}
     expect(existsSync(configPath)).toBe(true);
     expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain("CHANGESET_BASE_REF: ${{ github.event.pull_request.base.sha }}");
-    expect(workflow).not.toContain("CHANGESET_HEAD_BRANCH");
-    expect(workflow).not.toContain("CHANGESET_BASE_REPOSITORY");
-    expect(workflow).not.toContain("CHANGESET_HEAD_REPOSITORY");
+    expect(workflow).toContain("CHANGESET_HEAD_BRANCH: ${{ github.head_ref }}");
+    expect(workflow).toContain("CHANGESET_BASE_BRANCH: ${{ github.base_ref }}");
+    expect(workflow).toContain("CHANGESET_BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}");
+    expect(workflow).toContain("CHANGESET_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}");
+    expect(workflow).toContain("scripts/verify-version-packages-pr.mjs");
+    expect(workflow).toContain("changeset-release/main");
     const officialStatusCommand = 'npm run changeset:status -- --since "$CHANGESET_BASE_REF"';
     expect(workflow).toContain(officialStatusCommand);
     expect(workflow.indexOf(officialStatusCommand)).toBeLessThan(workflow.indexOf("npm run changeset:check"));

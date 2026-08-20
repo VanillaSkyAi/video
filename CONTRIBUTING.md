@@ -41,9 +41,10 @@ npm run changeset
 
 Select `@vanillaskyai/video` and choose `patch`, `minor`, or `major`. Use
 `npm run changeset -- --empty` for repository-only tooling, tests, workflows,
-maintainer documentation, or governance. No branch is currently exempt. A
-future Version Packages generator must introduce its exemption together with
-canonical repository, exact branch, and GitHub Actions bot provenance checks.
+maintainer documentation, or governance. The generated
+`changeset-release/main` branch is the sole exception. CI accepts it only from
+the canonical repository into `main`, with exact GitHub Actions bot commit
+provenance and a byte-reproducible tree generated from the exact PR base.
 Start each Changeset body with a one-line summary; put details and any migration
 headings after a blank line. Before opening a pull request, commit the Changeset
 and run:
@@ -53,9 +54,9 @@ npm run changeset:status
 npm run changeset:check
 ```
 
-Pending Changesets are immutable after merge. The current `release:prepare`
-command does not consume them; they must be consumed by the Version Packages
-lifecycle pull request before the next release.
+Pending Changesets are immutable after merge. The Version Packages workflow
+consumes them on a dedicated beta candidate branch; contributors and ordinary
+pull requests never edit or remove them.
 
 ## Maintainer guides
 

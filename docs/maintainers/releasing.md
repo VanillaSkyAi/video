@@ -15,21 +15,54 @@ The current automation is intentionally scoped to the `0.x` public beta line:
 before a stable `1.0.0`, remove the beta-only release-note and compatibility
 checks in a separately reviewed change.
 
-Changesets records the release intent and summary with each pull request. This
-governance step does not yet replace the explicit candidate preparation and
-publishing process below. Package-affecting pull requests name
+Changesets records the release intent and summary with each pull request.
+Package-affecting pull requests name
 `@vanillaskyai/video` with a `patch`, `minor`, or `major` bump; repository-only
-changes use an empty Changeset. No branch is currently exempt. A future Version
-Packages generator must introduce its exemption together with canonical
-repository, exact branch, and GitHub Actions bot provenance checks.
+changes use an empty Changeset. On each protected `main` update, the Version
+Packages workflow uses Changesets prerelease mode to generate or refresh the
+exact `changeset-release/main` branch. The current intended cycle uses the
+`beta` tag, so the pending `0.1.1` patch becomes `0.1.1-beta.0`.
 
-The current `release:prepare` command does not read, release, or consume pending
-Changeset records. Pending records **must be consumed by the Version Packages
-lifecycle pull request before any next release is tagged or published**. Until
-that lifecycle is merged, do not use the explicit preparation path to publish a
-candidate with pending Changesets.
+The workflow does not open, approve, or merge a pull request. It prints a direct
+compare URL; a normally authenticated maintainer or agent opens the PR. CI
+accepts consumed pending records only when it proves the branch is canonical,
+the commit has exact GitHub Actions bot provenance, the commit's only parent is
+the exact current `main` base, and regenerating from that base produces the same
+tree byte-for-byte.
 
-## Before creating a release tag
+This lifecycle prepares and reviews version files only. It does **not** publish,
+tag, create a GitHub release, or deploy the site. The existing tag-triggered
+publisher remains blocked until the next, separately reviewed main-only publish
+change lands. Do not use `release:prepare`, push a version tag, or publish a
+candidate during this boundary.
+
+## Prepare the Version Packages pull request
+
+After package-affecting work reaches protected `main`, wait for the `Version
+Packages` workflow and open the compare URL from its summary:
+
+```text
+https://github.com/VanillaSkyAi/video/compare/main...changeset-release/main?expand=1
+```
+
+The generated pull request consumes all pending Changesets, updates
+`CHANGELOG.md`, `package.json`, `package-lock.json`, public version references,
+example dependency pins, fixtures, and the bundled skill. Re-running generation
+from the same main SHA is byte-idempotent. Every subsequent `main` update
+regenerates from that exact SHA; a divergent or racing dedicated branch update
+fails closed.
+
+Review and merge the Version Packages PR like any other protected change. Do
+not manually edit generated files on the branch. The public site adopts a
+published stable SDK later through its separate private workflow.
+
+## Temporarily blocked publishing reference
+
+The commands below describe the publisher that is still present in the
+repository. They are retained only until the main-only publishing change
+replaces them and must not be run during this transition.
+
+### Before creating a release tag
 
 `VanillaSkyAi/video` is the canonical repository. npm publishing uses the
 trusted publisher bound to `.github/workflows/release.yml`, this repository,
@@ -49,7 +82,7 @@ repository, the clean checkout exactly matches approved `origin/main`, the
 package version is valid SemVer, and that version's tag is absent locally and
 remotely. Do not create or push the tag until it passes.
 
-## Prepare a candidate
+### Prepare a candidate
 
 Start from an up-to-date release branch with the pinned toolchain. Write the
 candidate notes under `## Unreleased`, then prepare one explicit SemVer target.
@@ -79,7 +112,7 @@ For a prerelease, pass its complete target, for example
 `npm run release:prepare -- 0.1.1-beta.0`. Prereleases publish under npm's
 `next` dist-tag and must be strictly newer than `latest`.
 
-## Tag and publish
+### Tag and publish
 
 After the release pull request is merged and the approved main commit is green,
 create an annotated tag that exactly matches `package.json`:
@@ -113,7 +146,7 @@ vanillasky.ai adopts stable npm releases separately through its site-owned
 release process. Site automation, credentials, deployment checks, and adoption
 instructions stay in that private workspace rather than this public SDK.
 
-## Verify from outside the repository
+### Verify from outside the repository
 
 ```bash
 npm view @vanillaskyai/video version dist.integrity dist.tarball

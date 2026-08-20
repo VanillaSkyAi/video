@@ -5,6 +5,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { parseChangesetFile } from "@changesets/parse";
+import {
+  CANONICAL_REPOSITORY,
+  VERSION_PACKAGES_BRANCH,
+  verifyVersionPackagesPullRequest,
+} from "./lib/version-packages.mjs";
 
 const PACKAGE_NAME = "@vanillaskyai/video";
 const RELEASE_TYPES = ["patch", "minor", "major"];
@@ -44,6 +49,8 @@ const REPOSITORY_ONLY_SCRIPTS = new Set([
   "verify:package",
   "verify:package-size",
   "verify:published",
+  "verify:version-packages-pr",
+  "version-packages:prepare",
 ]);
 const PACKAGE_FILES = new Set([
   ".npmignore",
@@ -173,8 +180,31 @@ function parseChangeset(path, contents) {
 export function verifyChangesetGovernance({
   root,
   baseRef = process.env.CHANGESET_BASE_REF ?? "origin/main",
+  headRef = process.env.CHANGESET_HEAD_REF ?? "HEAD",
+  baseBranch = process.env.CHANGESET_BASE_BRANCH,
+  baseRepository = process.env.CHANGESET_BASE_REPOSITORY,
+  headBranch = process.env.CHANGESET_HEAD_BRANCH,
+  headRepository = process.env.CHANGESET_HEAD_REPOSITORY,
+  changesetsCliPath = process.env.CHANGESETS_CLI_PATH,
 } = {}) {
   const repositoryRoot = resolve(root ?? fileURLToPath(new URL("..", import.meta.url)));
+  const canonicalGeneratedBranch = headBranch === VERSION_PACKAGES_BRANCH
+    && baseBranch === "main"
+    && headRepository === CANONICAL_REPOSITORY
+    && baseRepository === CANONICAL_REPOSITORY;
+  if (canonicalGeneratedBranch) {
+    const generated = verifyVersionPackagesPullRequest({
+      root: repositoryRoot,
+      baseRef,
+      headRef,
+      baseBranch,
+      baseRepository,
+      headBranch,
+      headRepository,
+      changesetsCliPath,
+    });
+    return { changesets: [], generated: true, packageAffecting: true, releaseType: null, version: generated.version };
+  }
   const comparison = `${baseRef}...HEAD`;
   const changes = parseNameStatus(git(repositoryRoot, ["diff", "--name-status", "-z", "--find-renames", comparison]));
   assertPendingChangesetsAreImmutable(changes);

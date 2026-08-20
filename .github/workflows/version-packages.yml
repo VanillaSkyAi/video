@@ -1,0 +1,100 @@
+name: Version Packages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: version-packages-main
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install the locked npm CLI
+        run: npm install --global npm@11.17.0
+      - run: npm ci
+
+      - name: Verify exact protected main source
+        env:
+          EXPECTED_MAIN_SHA: ${{ github.sha }}
+        run: |
+          test "${{ github.ref == 'refs/heads/main' }}" = "true"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          git fetch --no-tags origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Prepare beta Version Packages tree
+        id: prepare
+        env:
+          VERSION_PACKAGES_BASE_SHA: ${{ github.sha }}
+        run: |
+          npm run version-packages:prepare
+          if test -z "$(git status --porcelain)"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No package release Changesets are pending." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --check
+            git add --all
+            git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              -c commit.gpgsign=false commit -m "chore: version packages"
+          fi
+
+      - name: Verify existing generated branch before update
+        if: steps.prepare.outputs.changed == 'true'
+        id: remote
+        env:
+          CHANGESET_BASE_BRANCH: main
+          CHANGESET_BASE_REPOSITORY: VanillaSkyAi/video
+          CHANGESET_HEAD_BRANCH: changeset-release/main
+          CHANGESET_HEAD_REPOSITORY: VanillaSkyAi/video
+        run: |
+          remote_sha=""
+          if git fetch --no-tags origin refs/heads/changeset-release/main:refs/remotes/origin/changeset-release/main; then
+            remote_sha="$(git rev-parse refs/remotes/origin/changeset-release/main)"
+            remote_base="$(git rev-parse "$remote_sha^")"
+            git merge-base --is-ancestor "$remote_base" "${{ github.sha }}"
+            base_verifier="$RUNNER_TEMP/existing-version-packages-base"
+            git worktree add --detach "$base_verifier" "$remote_base"
+            CHANGESET_BASE_REF="$remote_base" \
+              CHANGESET_HEAD_REF="$remote_sha" \
+              CHANGESETS_CLI_PATH="$GITHUB_WORKSPACE/node_modules/@changesets/cli/bin.js" \
+              VERSION_PACKAGES_REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
+              node "$base_verifier/scripts/verify-version-packages-pr.mjs"
+          fi
+          echo "sha=$remote_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Push exact dedicated branch
+        if: steps.prepare.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REMOTE_SHA: ${{ steps.remote.outputs.sha }}
+        run: |
+          git fetch --no-tags origin main
+          test "$(git rev-parse origin/main)" = "${{ github.sha }}"
+          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" push origin \
+            --force-with-lease=refs/heads/changeset-release/main:"$REMOTE_SHA" \
+            HEAD:refs/heads/changeset-release/main
+          echo "Open or refresh the verified Version Packages PR:" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/VanillaSkyAi/video/compare/main...changeset-release/main?expand=1" >> "$GITHUB_STEP_SUMMARY"

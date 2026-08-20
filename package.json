@@ -102,6 +102,8 @@
     "changeset": "changeset",
     "changeset:status": "changeset status",
     "changeset:check": "node scripts/verify-changeset.mjs",
+    "version-packages:prepare": "node scripts/version-packages.mjs",
+    "verify:version-packages-pr": "node scripts/verify-version-packages-pr.mjs",
     "registry:sync": "npm run catalog:sync && node scripts/sync-template-registry.mjs",
     "registry:check": "node scripts/sync-template-registry.mjs --check && npm run catalog:check",
     "template:check": "tsx scripts/template-check.ts",
