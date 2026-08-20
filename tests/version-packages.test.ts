@@ -8,10 +8,14 @@ import {
   verifyVersionPackagesPullRequest,
 } from "../scripts/lib/version-packages.mjs";
 import { verifyChangesetGovernance } from "../scripts/verify-changeset.mjs";
+import { changesetsCliSupportsNode } from "./helpers/changesets-cli-runtime";
 
 const fixtures: string[] = [];
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const changesetsCliPath = resolve(repositoryRoot, "node_modules/@changesets/cli/bin.js");
+// Keep Node 20 SDK/runtime coverage while running real pinned-Changesets integration
+// on the Node versions that the CLI itself supports. Required Node 22 CI runs all cases.
+const itWithChangesetsCli = changesetsCliSupportsNode(process.versions.node) ? it : it.skip;
 
 function git(root: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -119,7 +123,7 @@ afterEach(() => {
 });
 
 describe("Version Packages generation", () => {
-  it("keeps the intended beta prerelease mode committed on main", () => {
+  itWithChangesetsCli("keeps the intended beta prerelease mode committed on main", () => {
     const checkedInState = readFileSync(join(repositoryRoot, ".changeset/pre.json"), "utf8");
     expect(JSON.parse(checkedInState)).toEqual({
       mode: "pre",
@@ -134,7 +138,7 @@ describe("Version Packages generation", () => {
     expect(generateVersionPackages({ root, changesetsCliPath })).toMatchObject({ version: "0.1.1-beta.0" });
   });
 
-  it("uses real Changesets prerelease output and synchronizes every version surface", () => {
+  itWithChangesetsCli("uses real Changesets prerelease output and synchronizes every version surface", () => {
     const { root } = createFixture();
 
     const result = generateVersionPackages({ root, changesetsCliPath });
@@ -167,7 +171,7 @@ describe("Version Packages generation", () => {
     }
   });
 
-  it("is byte-idempotent when rerun on the generated tree", () => {
+  itWithChangesetsCli("is byte-idempotent when rerun on the generated tree", () => {
     const { root } = createFixture();
     generateVersionPackages({ root, changesetsCliPath });
     const generated = treeSnapshot(root);
@@ -192,7 +196,7 @@ describe("Version Packages generation", () => {
     expect(existsSync(join(root, ".changeset/pre.json"))).toBe(false);
   });
 
-  it("generates from an exact detached main SHA without requiring a local main branch", () => {
+  itWithChangesetsCli("generates from an exact detached main SHA without requiring a local main branch", () => {
     const { baseRef, root } = createFixture();
     git(root, "checkout", "--detach", baseRef);
     git(root, "branch", "--delete", "main");
@@ -241,7 +245,7 @@ describe("Version Packages pull request verification", () => {
     headRepository: "VanillaSkyAi/video",
   };
 
-  it("accepts only the exact reproducible tree generated from its one protected-main parent", () => {
+  itWithChangesetsCli("accepts only the exact reproducible tree generated from its one protected-main parent", () => {
     const pullRequest = generatedPullRequest();
 
     expect(verifyVersionPackagesPullRequest({ ...pullRequest, ...metadata, changesetsCliPath })).toMatchObject({
@@ -251,7 +255,7 @@ describe("Version Packages pull request verification", () => {
     });
   });
 
-  it("routes the canonical generated branch through reproducibility instead of ordinary immutability", () => {
+  itWithChangesetsCli("routes the canonical generated branch through reproducibility instead of ordinary immutability", () => {
     const pullRequest = generatedPullRequest();
 
     expect(verifyChangesetGovernance({
@@ -266,7 +270,7 @@ describe("Version Packages pull request verification", () => {
     });
   });
 
-  it.each([
+  itWithChangesetsCli.each([
     ["branch", { headBranch: "changeset-release/main/forged" }],
     ["head repository", { headRepository: "fork/video" }],
     ["base repository", { baseRepository: "fork/video" }],
@@ -282,7 +286,7 @@ describe("Version Packages pull request verification", () => {
     })).toThrow(/version packages|canonical|main/i);
   });
 
-  it("rejects a same-repository branch whose generated files drift", () => {
+  itWithChangesetsCli("rejects a same-repository branch whose generated files drift", () => {
     const pullRequest = generatedPullRequest();
     write(pullRequest.root, "README.md", `${readFileSync(join(pullRequest.root, "README.md"), "utf8")}forged\n`);
     const forgedHead = commit(pullRequest.root, "chore: version packages", true);
@@ -295,7 +299,7 @@ describe("Version Packages pull request verification", () => {
     })).toThrow(/reproducible|tree|generated/i);
   });
 
-  it("rejects a generated branch with more than one commit after main", () => {
+  itWithChangesetsCli("rejects a generated branch with more than one commit after main", () => {
     const pullRequest = generatedPullRequest();
     write(pullRequest.root, "extra.txt", "not generated\n");
     const extraHead = commit(pullRequest.root, "add another commit", true);
@@ -308,7 +312,7 @@ describe("Version Packages pull request verification", () => {
     })).toThrow(/parent|single|base/i);
   });
 
-  it("rejects a commit that lacks the deterministic generated identity", () => {
+  itWithChangesetsCli("rejects a commit that lacks the deterministic generated identity", () => {
     const { baseRef, root } = createFixture();
     generateVersionPackages({ root, changesetsCliPath });
     const headRef = commit(root, "chore: version packages");
@@ -322,7 +326,7 @@ describe("Version Packages pull request verification", () => {
     })).toThrow(/generated commit identity/i);
   });
 
-  it("runs the exact verifier from a dependency-free temporary base worktree", () => {
+  itWithChangesetsCli("runs the exact verifier from a dependency-free temporary base worktree", () => {
     const { baseRef, root } = createFixture();
     for (const path of [
       "scripts/lib/changeset-records.mjs",

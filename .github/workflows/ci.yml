@@ -146,6 +146,8 @@ jobs:
     strategy:
       matrix:
         # The primary verify job covers Node 22.
+        # Node 20 runs all SDK/runtime tests; only pinned-Changesets CLI cases
+        # self-skip by its engine range and still run in required Node 22 verify.
         node: [20, 24]
     runs-on: ubuntu-latest
     timeout-minutes: 8

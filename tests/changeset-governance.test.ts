@@ -480,6 +480,16 @@ ${body}
     expect(verifyJob).toContain("if: ${{ always() }}");
     expect(verifyJob).toContain('test "${{ needs.pr-safety.result }}" = "success"');
     expect(verifyJob.indexOf("needs.pr-safety.result")).toBeLessThan(verifyJob.indexOf("actions/checkout@"));
+    expect(verifyJob).toContain("node-version: 22");
+    expect(verifyJob).toMatch(/^\s+- run: npm test$/m);
+    const nodeCompatibilityJob = workflow.slice(
+      workflow.indexOf("  node-compatibility:"),
+      workflow.indexOf("  react-compatibility:"),
+    );
+    expect(nodeCompatibilityJob).toContain("node: [20, 24]");
+    expect(nodeCompatibilityJob).toMatch(/^\s+- run: npm test$/m);
+    expect(nodeCompatibilityJob).toMatch(/^\s+- run: npm run build$/m);
+    expect(nodeCompatibilityJob).not.toMatch(/exclude.*version-packages|version-packages.*exclude/i);
     const officialStatusCommand = 'npm run changeset:status -- --since "$CHANGESET_BASE_REF"';
     expect(workflow).toContain(officialStatusCommand);
     expect(workflow.indexOf(officialStatusCommand)).toBeLessThan(workflow.indexOf("npm run changeset:check"));

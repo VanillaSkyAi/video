@@ -68,7 +68,14 @@ mode in `.changeset/pre.json` and generated `.changeset/pre/*.md` evidence.
 
 ## Release checks
 
-CI verifies Node 20 and 22, React 18 and 19, and Chromium, Firefox, and WebKit.
+The published SDK supports Node 20 and newer. CI runs the full SDK/runtime test
+suite and build on Node 20, 22, and 24. The pinned `@changesets/cli@3.0.1`
+release tool itself supports `^22.11 || ^24 || >=26`, so only tests that spawn
+that CLI are skipped on Node 20. The required Node 22 `verify` job always runs
+those real-CLI integration tests; the Node 20 job does not omit any SDK/runtime
+test file.
+
+CI also verifies React 18 and 19, and Chromium, Firefox, and WebKit.
 Before a release candidate, run both provider harnesses in a server-only
 environment and review the rendered artifacts using the [acceptance guide](docs/maintainers/acceptance.md).
 Replay passing is necessary but is not evidence of live-provider latency or

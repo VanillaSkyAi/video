@@ -9,6 +9,12 @@ needs `id-token: write`; verification jobs do not need write permissions or an
 npm token.
 
 Release automation uses Node `22.23.1` and the repository-locked `npm@11.17.0`.
+The SDK runtime remains supported on Node 20 and newer, but the pinned
+`@changesets/cli@3.0.1` supports only `^22.11 || ^24 || >=26`. Node 20 CI still
+runs all pure SDK/runtime coverage and the build; only tests that actually
+spawn the Changesets CLI use that exact engine boundary. The required Node 22
+`verify` job runs the complete real-CLI integration suite, so release-tool
+coverage cannot pass solely through the Node 20 compatibility lane.
 Signing is deferred until signing-key ownership is established. Until then, an
 annotated tag is mandatory, but a cryptographically signed tag is not.
 The current automation is intentionally scoped to the `0.x` public beta line:
