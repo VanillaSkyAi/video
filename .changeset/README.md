@@ -7,8 +7,10 @@ the code. Run `npm run changeset` for a package change, or
 Package changes must name `@vanillaskyai/video` and choose `patch`, `minor`, or
 `major`. The only exception is the generated `changeset-release/main` Version
 Packages branch. CI accepts that branch only from `VanillaSkyAi/video` into its
-own `main`, with the exact GitHub Actions bot commit identity and a tree that it
-reproduces byte-for-byte from the pull request's exact base commit. A copied
+own `main`, with fixed generated-commit author/committer fields, subject, and
+one-parent shape plus a tree that it reproduces byte-for-byte from the pull
+request's exact base commit. Those forgeable commit fields constrain the
+generated shape; they are not proof of GitHub Actions provenance. A copied
 branch name, fork, stale base, extra commit, or edited generated file fails.
 
 Do not modify, rename, or delete a pending Changeset already owned by `main`.

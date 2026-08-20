@@ -40,6 +40,11 @@ describe("Version Packages workflow", () => {
     expect(workflow).toContain("HEAD:refs/heads/changeset-release/main");
     expect(workflow).not.toContain("HEAD:main");
     expect(workflow).toContain("scripts/verify-version-packages-pr.mjs");
+    expect(workflow).toContain('(cd "$base_verifier" && npm ci --ignore-scripts)');
+    expect(workflow).not.toContain('npm --prefix "$base_verifier" ci');
+    expect(workflow).toContain('CHANGESETS_CLI_PATH="$base_verifier/node_modules/@changesets/cli/bin.js"');
+    expect(workflow).toContain('CHANGESETS_PARSE_PATH="$base_verifier/node_modules/@changesets/parse/dist/index.mjs"');
+    expect(workflow).not.toContain('CHANGESETS_CLI_PATH="$GITHUB_WORKSPACE/node_modules/@changesets/cli/bin.js"');
     expect(workflow).toContain("github-actions[bot]");
   });
 

@@ -82,9 +82,11 @@ jobs:
             git merge-base --is-ancestor "$remote_base" "${{ github.sha }}"
             base_verifier="$RUNNER_TEMP/existing-version-packages-base"
             git worktree add --detach "$base_verifier" "$remote_base"
+            (cd "$base_verifier" && npm ci --ignore-scripts)
             CHANGESET_BASE_REF="$remote_base" \
               CHANGESET_HEAD_REF="$remote_sha" \
-              CHANGESETS_CLI_PATH="$GITHUB_WORKSPACE/node_modules/@changesets/cli/bin.js" \
+              CHANGESETS_CLI_PATH="$base_verifier/node_modules/@changesets/cli/bin.js" \
+              CHANGESETS_PARSE_PATH="$base_verifier/node_modules/@changesets/parse/dist/index.mjs" \
               VERSION_PACKAGES_REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
               node "$base_verifier/scripts/verify-version-packages-pr.mjs"
           fi

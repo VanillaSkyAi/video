@@ -13,6 +13,7 @@ try {
     headBranch: process.env.CHANGESET_HEAD_BRANCH,
     headRepository: process.env.CHANGESET_HEAD_REPOSITORY,
     changesetsCliPath: process.env.CHANGESETS_CLI_PATH,
+    changesetsParsePath: process.env.CHANGESETS_PARSE_PATH,
   });
   console.log(`Version Packages ${result.version} is reproducible at ${result.headRef}.`);
 } catch (error) {

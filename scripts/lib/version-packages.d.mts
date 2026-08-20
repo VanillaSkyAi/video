@@ -6,6 +6,7 @@ export const VERSION_PACKAGES_BOT: Readonly<{ email: string; name: string }>;
 export function generateVersionPackages(options: {
   root: string;
   changesetsCliPath?: string;
+  changesetsParsePath?: string;
 }): { changed: boolean; previousVersion: string; version: string };
 
 export function verifyVersionPackagesPullRequest(options: {
@@ -17,4 +18,5 @@ export function verifyVersionPackagesPullRequest(options: {
   headBranch?: string;
   headRepository?: string;
   changesetsCliPath?: string;
+  changesetsParsePath?: string;
 }): { baseRef: string; headRef: string; version: string };

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -108,6 +108,21 @@ afterEach(() => {
 });
 
 describe("Version Packages generation", () => {
+  it("keeps the intended beta prerelease mode committed on main", () => {
+    const checkedInState = readFileSync(join(repositoryRoot, ".changeset/pre.json"), "utf8");
+    expect(JSON.parse(checkedInState)).toEqual({
+      mode: "pre",
+      tag: "beta",
+    });
+    const { root } = createFixture();
+    execFileSync(process.execPath, [changesetsCliPath, "pre", "enter", "beta"], {
+      cwd: root,
+      env: { ...process.env, CI: "1" },
+    });
+    expect(readFileSync(join(root, ".changeset/pre.json"), "utf8")).toBe(checkedInState);
+    expect(generateVersionPackages({ root, changesetsCliPath })).toMatchObject({ version: "0.1.1-beta.0" });
+  });
+
   it("uses real Changesets prerelease output and synchronizes every version surface", () => {
     const { root } = createFixture();
 
@@ -178,6 +193,20 @@ describe("Version Packages generation", () => {
     json(root, ".changeset/pre.json", { mode: "pre", tag: "next" });
 
     expect(() => generateVersionPackages({ root, changesetsCliPath })).toThrow(/beta.*next|next.*beta/i);
+  });
+
+  it("rejects a pending Changeset symlink instead of silently skipping it", () => {
+    const { root } = createFixture({ release: "empty" });
+    write(root, "linked-release.md", `---
+"@vanillaskyai/video": patch
+---
+
+Linked release intent must never be followed.
+`);
+    symlinkSync("../linked-release.md", join(root, ".changeset/linked-release.md"));
+    commit(root, "add linked release intent");
+
+    expect(() => generateVersionPackages({ root, changesetsCliPath })).toThrow(/100644|regular file|symlink/i);
   });
 });
 
@@ -263,7 +292,7 @@ describe("Version Packages pull request verification", () => {
     })).toThrow(/parent|single|base/i);
   });
 
-  it("rejects a generated commit without GitHub Actions bot provenance", () => {
+  it("rejects a commit that lacks the deterministic generated identity", () => {
     const { baseRef, root } = createFixture();
     generateVersionPackages({ root, changesetsCliPath });
     const headRef = commit(root, "chore: version packages");
@@ -274,6 +303,44 @@ describe("Version Packages pull request verification", () => {
       root,
       ...metadata,
       changesetsCliPath,
-    })).toThrow(/github-actions\[bot\]|provenance/i);
+    })).toThrow(/generated commit identity/i);
+  });
+
+  it("runs the exact verifier from a dependency-free temporary base worktree", () => {
+    const { baseRef, root } = createFixture();
+    for (const path of [
+      "scripts/lib/changeset-records.mjs",
+      "scripts/lib/version-packages.mjs",
+      "scripts/lib/version-surfaces.mjs",
+      "scripts/verify-version-packages-pr.mjs",
+    ]) write(root, path, readFileSync(join(repositoryRoot, path), "utf8"));
+    commit(root, "add base verifier");
+    const verifierBase = git(root, "rev-parse", "HEAD");
+    generateVersionPackages({ root, changesetsCliPath });
+    const headRef = commit(root, "chore: version packages", true);
+    const baseWorktree = mkdtempSync(join(tmpdir(), "vanillasky-version-packages-base-verifier-"));
+    fixtures.push(baseWorktree);
+    git(root, "worktree", "add", "--detach", baseWorktree, verifierBase);
+
+    const output = execFileSync(process.execPath, [join(baseWorktree, "scripts/verify-version-packages-pr.mjs")], {
+      cwd: baseWorktree,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        CHANGESET_BASE_BRANCH: "main",
+        CHANGESET_BASE_REF: verifierBase,
+        CHANGESET_BASE_REPOSITORY: "VanillaSkyAi/video",
+        CHANGESET_HEAD_BRANCH: "changeset-release/main",
+        CHANGESET_HEAD_REF: headRef,
+        CHANGESET_HEAD_REPOSITORY: "VanillaSkyAi/video",
+        CHANGESETS_CLI_PATH: changesetsCliPath,
+        CHANGESETS_PARSE_PATH: resolve(repositoryRoot, "node_modules/@changesets/parse/dist/index.mjs"),
+        VERSION_PACKAGES_REPOSITORY_ROOT: root,
+      },
+    });
+
+    expect(output).toContain("0.1.1-beta.0 is reproducible");
+    expect(existsSync(join(baseWorktree, "node_modules"))).toBe(false);
+    expect(baseRef).not.toBe(verifierBase);
   });
 });

@@ -1,9 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { parseChangesetFile } from "@changesets/parse";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { assertChangesetRecordFile, listPendingChangesetPaths } from "./changeset-records.mjs";
 import { synchronizeVersionSurfaces } from "./version-surfaces.mjs";
 
 export const VERSION_PACKAGES_BRANCH = "changeset-release/main";
@@ -28,6 +28,25 @@ function defaultChangesetsCliPath() {
   return resolve(fileURLToPath(new URL("../..", import.meta.url)), "node_modules/@changesets/cli/bin.js");
 }
 
+function defaultChangesetsParsePath() {
+  return resolve(fileURLToPath(new URL("../..", import.meta.url)), "node_modules/@changesets/parse/dist/index.mjs");
+}
+
+function parseChangeset(contents, changesetsParsePath) {
+  const parserUrl = pathToFileURL(resolve(changesetsParsePath)).href;
+  const program = `
+    import { parseChangesetFile } from ${JSON.stringify(parserUrl)};
+    let contents = "";
+    process.stdin.setEncoding("utf8");
+    for await (const chunk of process.stdin) contents += chunk;
+    process.stdout.write(JSON.stringify(parseChangesetFile(contents)));
+  `;
+  return JSON.parse(execFileSync(process.execPath, ["--input-type=module", "--eval", program], {
+    encoding: "utf8",
+    input: contents,
+  }));
+}
+
 function runChangesets(root, cliPath, args) {
   return execFileSync(process.execPath, [cliPath, ...args], {
     cwd: root,
@@ -46,18 +65,22 @@ function assertBetaMode(root) {
   return true;
 }
 
-export function generateVersionPackages({ root, changesetsCliPath = defaultChangesetsCliPath() }) {
+export function generateVersionPackages({
+  root,
+  changesetsCliPath = defaultChangesetsCliPath(),
+  changesetsParsePath = defaultChangesetsParsePath(),
+}) {
   const repositoryRoot = resolve(root);
   const manifestPath = join(repositoryRoot, "package.json");
   const previousVersion = readJson(manifestPath).version;
-  const pendingRecords = readdirSync(join(repositoryRoot, ".changeset"), { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md");
+  const pendingRecords = listPendingChangesetPaths({ root: repositoryRoot });
   if (pendingRecords.length === 0) {
     return { changed: false, previousVersion, version: previousVersion };
   }
-  const releases = pendingRecords.flatMap((entry) => parseChangesetFile(
-    readFileSync(join(repositoryRoot, ".changeset", entry.name), "utf8"),
-  ).releases);
+  const releases = pendingRecords.flatMap((path) => {
+    assertChangesetRecordFile({ root: repositoryRoot, path });
+    return parseChangeset(readFileSync(join(repositoryRoot, path), "utf8"), changesetsParsePath).releases;
+  });
   const packageRelease = releases.find((release) => release.name === PACKAGE_NAME);
   const unsupported = releases.filter((release) => release.name !== PACKAGE_NAME);
   if (unsupported.length > 0) {
@@ -106,7 +129,7 @@ function assertBotCommit(root, headRef) {
     || committerEmail !== VERSION_PACKAGES_BOT.email
     || subject !== VERSION_PACKAGES_COMMIT
   ) {
-    throw new Error("Version Packages commit lacks exact github-actions[bot] provenance");
+    throw new Error("Version Packages commit does not match the deterministic generated commit identity");
   }
 }
 
@@ -119,6 +142,7 @@ export function verifyVersionPackagesPullRequest({
   headBranch,
   headRepository,
   changesetsCliPath = defaultChangesetsCliPath(),
+  changesetsParsePath = defaultChangesetsParsePath(),
 }) {
   assertCanonicalMetadata({ baseBranch, baseRepository, headBranch, headRepository });
   const repositoryRoot = resolve(root);
@@ -136,7 +160,7 @@ export function verifyVersionPackagesPullRequest({
       encoding: "utf8",
     });
     git(reproductionRoot, ["checkout", "--quiet", "--detach", resolvedBase]);
-    const generated = generateVersionPackages({ root: reproductionRoot, changesetsCliPath });
+    const generated = generateVersionPackages({ root: reproductionRoot, changesetsCliPath, changesetsParsePath });
     if (!generated.changed) throw new Error("Version Packages base has no package release Changeset to generate");
     git(reproductionRoot, ["add", "--all"]);
     const expectedTree = git(reproductionRoot, ["write-tree"]);

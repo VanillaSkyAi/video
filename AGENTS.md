@@ -93,8 +93,8 @@ Every ordinary pull request must add a Changeset. Package-affecting work names
 tooling, tests, workflows, governance, and maintainer documentation use an
 empty Changeset. The generated `changeset-release/main` branch is the only
 exception. CI must prove its canonical same-repository identity, exact GitHub
-Actions bot commit provenance, one-commit ancestry from the exact `main` base,
-and byte-for-byte reproducible generated tree. Base-owned pending Changeset
+metadata, deterministic generated-commit identity and one-commit shape from the
+exact `main` base, and byte-for-byte reproducible generated tree. Base-owned pending Changeset
 files remain immutable on every ordinary branch.
 
 The Version Packages workflow prepares beta candidate files but does not

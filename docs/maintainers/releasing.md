@@ -26,9 +26,10 @@ exact `changeset-release/main` branch. The current intended cycle uses the
 The workflow does not open, approve, or merge a pull request. It prints a direct
 compare URL; a normally authenticated maintainer or agent opens the PR. CI
 accepts consumed pending records only when it proves the branch is canonical,
-the commit has exact GitHub Actions bot provenance, the commit's only parent is
-the exact current `main` base, and regenerating from that base produces the same
-tree byte-for-byte.
+the commit matches the deterministic generated-commit identity and one-parent
+shape from the exact current `main` base, and regenerating from that base
+produces the same tree byte-for-byte. The fixed commit fields constrain the
+generated shape; they do not independently prove GitHub Actions provenance.
 
 This lifecycle prepares and reviews version files only. It does **not** publish,
 tag, create a GitHub release, or deploy the site. The existing tag-triggered

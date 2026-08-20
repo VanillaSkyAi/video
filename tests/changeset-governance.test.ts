@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -260,6 +260,27 @@ Reject an unsupported release type.
     expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(/invalid version type/i);
   });
 
+  it("rejects a newly added Changeset symlink instead of following it", () => {
+    const { baseRef, root } = createRepository();
+    write(root, "src/index.ts", "export const version = 2;\n");
+    write(root, "release-intent.md", packageChangeset);
+    mkdirSync(join(root, ".changeset"), { recursive: true });
+    symlinkSync("../release-intent.md", join(root, ".changeset/linked-release.md"));
+    commit(root, "add linked release intent");
+
+    expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(/100644|regular file|symlink/i);
+  });
+
+  it("rejects an executable Changeset record", () => {
+    const { baseRef, root } = createRepository();
+    write(root, "src/index.ts", "export const version = 2;\n");
+    write(root, ".changeset/executable-release.md", packageChangeset);
+    chmodSync(join(root, ".changeset/executable-release.md"), 0o755);
+    commit(root, "add executable release intent");
+
+    expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(/100644|regular file/i);
+  });
+
   it.each([
     {
       name: "a heading instead of a one-line summary",
@@ -285,19 +306,19 @@ ${body}
     expect(() => verifyChangesetGovernance({ root, baseRef })).toThrow(error);
   });
 
-  it("does not exempt a Version Packages branch before generator provenance exists", () => {
+  it("does not exempt a Version Packages branch before the generated shape exists", () => {
     const { baseRef, root } = createRepository();
     write(root, "src/index.ts", "export const version = 2;\n");
     commit(root, "consume pending changesets");
 
-    const provenanceClaim = {
+    const generatedBranchClaim = {
       root,
       baseRef,
       headBranch: "changeset-release/main",
       headRepository: canonicalRepository,
       baseRepository: canonicalRepository,
     };
-    expect(() => verifyChangesetGovernance(provenanceClaim)).toThrow(/new changeset/i);
+    expect(() => verifyChangesetGovernance(generatedBranchClaim)).toThrow(/new changeset/i);
   });
 
   it.each([
@@ -314,8 +335,8 @@ ${body}
     write(root, "src/index.ts", "export const version = 2;\n");
     commit(root, "spoof a generated release branch");
 
-    const provenanceClaim = { root, baseRef, headBranch };
-    expect(() => verifyChangesetGovernance(provenanceClaim)).toThrow(/new changeset/i);
+    const generatedBranchClaim = { root, baseRef, headBranch };
+    expect(() => verifyChangesetGovernance(generatedBranchClaim)).toThrow(/new changeset/i);
   });
 
   it("pins Changesets and runs governance for every ordinary pull request", () => {
@@ -337,6 +358,12 @@ ${body}
     expect(workflow).toContain("CHANGESET_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}");
     expect(workflow).toContain("scripts/verify-version-packages-pr.mjs");
     expect(workflow).toContain("changeset-release/main");
+    expect(workflow).toContain('(cd "$base_verifier" && npm ci --ignore-scripts)');
+    expect(workflow).not.toContain('npm --prefix "$base_verifier" ci');
+    expect(workflow).toContain('CHANGESETS_CLI_PATH="$base_verifier/node_modules/@changesets/cli/bin.js"');
+    expect(workflow).toContain('CHANGESETS_PARSE_PATH="$base_verifier/node_modules/@changesets/parse/dist/index.mjs"');
+    const generatedRoute = workflow.slice(workflow.indexOf('if [[ "$CHANGESET_HEAD_BRANCH" == "changeset-release/main"'));
+    expect(generatedRoute).not.toContain('CHANGESETS_CLI_PATH="$GITHUB_WORKSPACE/node_modules');
     const officialStatusCommand = 'npm run changeset:status -- --since "$CHANGESET_BASE_REF"';
     expect(workflow).toContain(officialStatusCommand);
     expect(workflow.indexOf(officialStatusCommand)).toBeLessThan(workflow.indexOf("npm run changeset:check"));

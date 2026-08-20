@@ -15,4 +15,5 @@ export function verifyChangesetGovernance(options?: {
   headBranch?: string;
   headRepository?: string;
   changesetsCliPath?: string;
+  changesetsParsePath?: string;
 }): ChangesetGovernanceResult;

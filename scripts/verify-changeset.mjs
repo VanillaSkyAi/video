@@ -10,6 +10,7 @@ import {
   VERSION_PACKAGES_BRANCH,
   verifyVersionPackagesPullRequest,
 } from "./lib/version-packages.mjs";
+import { assertChangesetRecordFile } from "./lib/changeset-records.mjs";
 
 const PACKAGE_NAME = "@vanillaskyai/video";
 const RELEASE_TYPES = ["patch", "minor", "major"];
@@ -186,6 +187,7 @@ export function verifyChangesetGovernance({
   headBranch = process.env.CHANGESET_HEAD_BRANCH,
   headRepository = process.env.CHANGESET_HEAD_REPOSITORY,
   changesetsCliPath = process.env.CHANGESETS_CLI_PATH,
+  changesetsParsePath = process.env.CHANGESETS_PARSE_PATH,
 } = {}) {
   const repositoryRoot = resolve(root ?? fileURLToPath(new URL("..", import.meta.url)));
   const canonicalGeneratedBranch = headBranch === VERSION_PACKAGES_BRANCH
@@ -202,6 +204,7 @@ export function verifyChangesetGovernance({
       headBranch,
       headRepository,
       changesetsCliPath,
+      changesetsParsePath,
     });
     return { changesets: [], generated: true, packageAffecting: true, releaseType: null, version: generated.version };
   }
@@ -216,7 +219,10 @@ export function verifyChangesetGovernance({
     throw new Error("Every pull request must add a new changeset; use `npm run changeset` or `npm run changeset -- --empty`");
   }
 
-  const releaseTypes = changesets.flatMap((path) => parseChangeset(path, readFileSync(resolve(repositoryRoot, path), "utf8")));
+  const releaseTypes = changesets.flatMap((path) => {
+    assertChangesetRecordFile({ root: repositoryRoot, path, ref: headRef });
+    return parseChangeset(path, readFileSync(resolve(repositoryRoot, path), "utf8"));
+  });
   const packageAffecting = changedPaths.some((path) => isPackagePath(repositoryRoot, baseRef, path));
   if (packageAffecting && releaseTypes.length === 0) {
     throw new Error(`Package changes require ${PACKAGE_NAME} to declare patch, minor, or major in a changeset`);

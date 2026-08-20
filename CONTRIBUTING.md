@@ -43,8 +43,8 @@ Select `@vanillaskyai/video` and choose `patch`, `minor`, or `major`. Use
 `npm run changeset -- --empty` for repository-only tooling, tests, workflows,
 maintainer documentation, or governance. The generated
 `changeset-release/main` branch is the sole exception. CI accepts it only from
-the canonical repository into `main`, with exact GitHub Actions bot commit
-provenance and a byte-reproducible tree generated from the exact PR base.
+the canonical repository into `main`, with the deterministic generated-commit
+identity and shape plus a byte-reproducible tree generated from the exact PR base.
 Start each Changeset body with a one-line summary; put details and any migration
 headings after a blank line. Before opening a pull request, commit the Changeset
 and run:

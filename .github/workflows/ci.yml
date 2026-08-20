@@ -41,7 +41,9 @@ jobs:
             && "$CHANGESET_BASE_REPOSITORY" == "VanillaSkyAi/video" ]]; then
             base_verifier="$RUNNER_TEMP/version-packages-base"
             git worktree add --detach "$base_verifier" "$CHANGESET_BASE_REF"
-            CHANGESETS_CLI_PATH="$GITHUB_WORKSPACE/node_modules/@changesets/cli/bin.js" \
+            (cd "$base_verifier" && npm ci --ignore-scripts)
+            CHANGESETS_CLI_PATH="$base_verifier/node_modules/@changesets/cli/bin.js" \
+              CHANGESETS_PARSE_PATH="$base_verifier/node_modules/@changesets/parse/dist/index.mjs" \
               VERSION_PACKAGES_REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
               node "$base_verifier/scripts/verify-version-packages-pr.mjs"
           else

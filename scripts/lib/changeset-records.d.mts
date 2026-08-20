@@ -1,0 +1,9 @@
+export function listPendingChangesetPaths(options: { root: string }): string[];
+
+export function assertChangesetRecordFile(options: {
+  root: string;
+  path: string;
+  ref?: string;
+}): void;
+
+export function assertNoPendingChangesets(options: { root: string }): void;
