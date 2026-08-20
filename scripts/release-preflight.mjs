@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertReleasePreflight } from "./lib/release-preflight.mjs";
 import { assertReleaseToolchain } from "./lib/release-toolchain.mjs";
-import { listPendingChangesetPaths } from "./lib/changeset-records.mjs";
+import { listPendingPackageChangesetPaths } from "./lib/changeset-records.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -36,7 +36,7 @@ const result = assertReleasePreflight({
   originMain: git("rev-parse", "origin/main"),
   packageName: manifest.name,
   packageRepository: manifest.repository?.url,
-  pendingChangesets: listPendingChangesetPaths({ root }),
+  pendingChangesets: listPendingPackageChangesetPaths({ root }),
   remoteTagExists: remoteTag.status === 0,
   remoteUrl: git("remote", "get-url", "origin"),
   status: git("status", "--porcelain"),

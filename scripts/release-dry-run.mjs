@@ -26,7 +26,7 @@ import {
 import { createReleaseNpmGuard } from "./lib/release-npm-guard.mjs";
 import { extractChangesetReleaseNotes } from "./lib/release-notes.mjs";
 import { assertReleaseToolchain } from "./lib/release-toolchain.mjs";
-import { assertNoPendingChangesets } from "./lib/changeset-records.mjs";
+import { assertNoPendingPackageChangesets } from "./lib/changeset-records.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const expectedRepository = "VanillaSkyAi/video";
@@ -38,7 +38,7 @@ assertReleaseToolchain({
   nodeVersion: process.versions.node,
   npmVersion: execFileSync("npm", ["--version"], { encoding: "utf8" }).trim(),
 });
-assertNoPendingChangesets({ root });
+assertNoPendingPackageChangesets({ root });
 const temporaryRoot = mkdtempSync(join(tmpdir(), "vanillasky-release-dry-run-"));
 const requestedOutput = process.env.VANILLASKY_RELEASE_OUTPUT_DIR;
 const outputDirectory = requestedOutput ? resolve(requestedOutput) : join(temporaryRoot, "release-assets");

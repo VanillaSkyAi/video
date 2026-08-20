@@ -30,9 +30,9 @@ describe("local release dry run", () => {
     const dryRun = readFileSync(resolve(root, "scripts", "release-dry-run.mjs"), "utf8");
     const preflight = readFileSync(resolve(root, "scripts", "release-preflight.mjs"), "utf8");
 
-    expect(dryRun).toContain("assertNoPendingChangesets");
-    expect(preflight).toContain("listPendingChangesetPaths");
-    expect(dryRun.indexOf("assertNoPendingChangesets"))
+    expect(dryRun).toContain("assertNoPendingPackageChangesets");
+    expect(preflight).toContain("listPendingPackageChangesetPaths");
+    expect(dryRun.indexOf("assertNoPendingPackageChangesets"))
       .toBeLessThan(dryRun.indexOf("const temporaryRoot = mkdtempSync"));
   });
 
