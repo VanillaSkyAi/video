@@ -4,6 +4,9 @@ import { streamVideoPlan } from "./planner";
 
 const handle = createVideoHandler({
   templates,
+  // This deterministic compatibility fixture intentionally produces one body
+  // scene. Ordinary AI planners should keep the default closer requirement.
+  requireCloser: false,
   // This local-only bypass makes the copied quickstart runnable in development.
   // Replace it with your application's session check before deploying.
   authorize: (request) => {

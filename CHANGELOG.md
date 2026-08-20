@@ -6,6 +6,25 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 <!-- Add release notes for the next version here. -->
 
+## 0.2.0
+
+- Adds an application-owned `resolveMedia` hook that turns bounded semantic
+  media intent into approved image or video backgrounds without exposing
+  provider credentials, unresolved queries, or untrusted URLs to clients.
+- Requires one grounded closer by default, holds it while body scenes stream,
+  and emits it last so complete videos finish on a payoff or supplied call to
+  action instead of an arbitrary body scene.
+- Improves planning for rich inputs with adaptive scene counts, coherent
+  multi-entry sequencing, reusable best-fit templates, and explicit partial
+  completion warnings when provider or duration limits truncate the plan.
+- Adds `VideoPlaybackMode` with sound-first interaction, repeat-stream
+  autoplay, manual, muted-autoplay, and immediate-autoplay policies.
+- Renders `VideoInput.opening` as a deterministic, asset-free gradient media
+  scene and preserves it as the visible start poster before playback.
+- Resets replacement streams as fresh playback sessions, keeps completed end
+  frames stable, and provides a replay control instead of replaying exit
+  animation at the terminal boundary.
+
 ## 0.1.1
 
 No runtime changes: the public API, behavior, and dependencies are identical to

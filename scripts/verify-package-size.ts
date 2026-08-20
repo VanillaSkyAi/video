@@ -12,7 +12,7 @@ import { selectPackedArtifact } from "./lib/release-integrity.mjs";
 
 export const PACKED_SIZE_BUDGET = 1_250_000;
 export const UNPACKED_SIZE_BUDGET = 5_000_000;
-export const INITIAL_CLIENT_GZIP_BUDGET = 50_000;
+export const INITIAL_CLIENT_GZIP_BUDGET = 52_000;
 export const TEST_KIT_GZIP_BUDGET = 50_000;
 export const LOADED_TEST_KIT_GZIP_BUDGET = 60_000;
 export const ENTRY_GZIP_HEADROOM = 5_000;

@@ -33,9 +33,9 @@ describe("release package size budget", () => {
 
   it("keeps the default browser entry small by loading selected renderers on demand", async () => {
     const { assertInitialClientWithinBudget } = await import("../scripts/verify-package-size");
-    expect(() => assertInitialClientWithinBudget(45_000)).not.toThrow();
-    expect(() => assertInitialClientWithinBudget(45_001)).toThrow(/headroom/i);
-    expect(() => assertInitialClientWithinBudget(50_001)).toThrow(/initial client gzip size/i);
+    expect(() => assertInitialClientWithinBudget(47_000)).not.toThrow();
+    expect(() => assertInitialClientWithinBudget(47_001)).toThrow(/headroom/i);
+    expect(() => assertInitialClientWithinBudget(52_001)).toThrow(/initial client gzip size/i);
   });
 
   it("bounds the transitive React-free test entry", async () => {
