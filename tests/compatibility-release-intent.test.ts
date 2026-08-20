@@ -343,6 +343,56 @@ describe("compatibility release intent", () => {
     expect(findBreakingChangeEvidence(intent)).toBeUndefined();
   });
 
+  it.each([1, 2, 3])("does not discover outer changelog headings inside a %i-space CommonMark fence", (indent) => {
+    const root = fixtureRoot();
+    const spaces = " ".repeat(indent);
+    writeFileSync(join(root, "CHANGELOG.md"), [
+      "# Changelog",
+      "",
+      `${spaces}\`\`\`md`,
+      "## 0.2.0",
+      "### Minor Changes",
+      `${spaces}\`\`\``,
+      "- 1234567: Remove the root parser export.",
+      "  ",
+      ...validEvidenceBody().split("\n").slice(2).map((line) => `  ${line}`),
+      "",
+      "## 0.1.0",
+      "Initial release.",
+    ].join("\n"));
+    const intent = readCompatibilityReleaseIntent({
+      root,
+      packageName,
+      baselineVersion: "0.1.0",
+      candidateVersion: "0.2.0",
+    });
+
+    expect(findBreakingChangeEvidence(intent)).toBeUndefined();
+  });
+
+  it("treats four leading spaces as indented code rather than an outer fence", () => {
+    const root = fixtureRoot();
+    writeFileSync(join(root, "CHANGELOG.md"), [
+      "# Changelog",
+      "",
+      "    ```md",
+      "## 0.2.0",
+      "",
+      "### Minor Changes",
+      "",
+      `- ${validEvidenceBody().split("\n")[0]}`,
+      ...validEvidenceBody().split("\n").slice(1).map((line) => `  ${line}`),
+    ].join("\n"));
+    const intent = readCompatibilityReleaseIntent({
+      root,
+      packageName,
+      baselineVersion: "0.1.0",
+      candidateVersion: "0.2.0",
+    });
+
+    expect(findBreakingChangeEvidence(intent)).toBe("CHANGELOG.md#0.2.0");
+  });
+
   it("requires one plain summary line followed by a blank line", () => {
     const summaryless = validEvidenceBody().split("\n").slice(2).join("\n");
     const twoLineSummary = validEvidenceBody().replace(
@@ -406,5 +456,18 @@ describe("compatibility release intent", () => {
 
     expect(findBreakingChangeEvidence(minorIntent(fenceBeforeHeadings))).toBeUndefined();
     expect(findBreakingChangeEvidence(minorIntent(bothFencesInBreaking))).toBeUndefined();
+  });
+
+  it.each([1, 2, 3])("accepts concrete examples in a %i-space CommonMark fence", (indent) => {
+    const spaces = " ".repeat(indent);
+    const body = validEvidenceBody().replaceAll("```", `${spaces}\`\`\``);
+
+    expect(findBreakingChangeEvidence(minorIntent(body))).toBe(".changeset/remove-root.md");
+  });
+
+  it("does not treat four-space indented markers as fenced examples", () => {
+    const body = validEvidenceBody().replaceAll("```", "    ```");
+
+    expect(findBreakingChangeEvidence(minorIntent(body))).toBeUndefined();
   });
 });

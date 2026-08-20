@@ -150,14 +150,14 @@ function isPlainSummary(line) {
 }
 
 function fenceOpening(line) {
-  const match = /^(`{3,}|~{3,})(.*)$/.exec(line);
+  const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
   if (!match) return undefined;
   return { marker: match[1][0], length: match[1].length };
 }
 
 function isFenceClosing(line, fence) {
   const escapedMarker = escapeRegExp(fence.marker);
-  return new RegExp(`^${escapedMarker}{${fence.length},}\\s*$`).test(line);
+  return new RegExp(`^ {0,3}${escapedMarker}{${fence.length},}\\s*$`).test(line);
 }
 
 function isConcreteCode(lines) {
@@ -174,7 +174,7 @@ function hasStructuredBreakingEvidence(markdown) {
   const codeFences = { breaking: 0, adoption: 0 };
   for (const line of lines.slice(2)) {
     if (fence) {
-      if (line === "### Breaking changes" || line === "### Adoption") return false;
+      if (/^ {0,3}### (?:Breaking changes|Adoption)$/.test(line)) return false;
       if (isFenceClosing(line, fence)) {
         if (!isConcreteCode(fence.code)) return false;
         codeFences[fence.phase] += 1;
