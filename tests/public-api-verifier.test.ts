@@ -211,6 +211,8 @@ describe("public API surface verifier", () => {
         evidence: [{
           source: "CHANGELOG.md#0.2.0",
           body: [
+            "Remove the root parser export.",
+            "",
             "### Breaking changes",
             "Replace the removed root entry with the scoped entry:",
             "```ts",
@@ -243,6 +245,8 @@ describe("public API surface verifier", () => {
         evidence: [{
           source: ".changeset/remove-root.md",
           body: [
+            "Remove the root parser export.",
+            "",
             "### Breaking changes",
             "Before:",
             "```ts",
@@ -288,7 +292,7 @@ describe("public API surface verifier", () => {
         releaseType: "minor",
         evidence: [{
           source: "CHANGELOG.md#0.2.0",
-          body: "### Breaking changes\nDescribe the old API.\n### Adoption\nDescribe the new API.",
+          body: "Remove the root parser export.\n\n### Breaking changes\nDescribe the old API.\n### Adoption\nDescribe the new API.",
         }],
       },
     })).toThrow(/Breaking changes.*fenced.*Adoption.*fenced/is);

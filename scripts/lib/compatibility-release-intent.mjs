@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { compareSemver, parseSemver } from "./release-integrity.mjs";
 
@@ -26,13 +27,29 @@ function parseChangeset(source, packageName) {
   return { releaseType: release[1], body: match[2].trim() };
 }
 
-function pendingChangesetIntent(root, packageName) {
-  const directory = join(root, ".changeset");
-  if (!existsSync(directory)) return undefined;
-  const changesets = readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md")
-    .map((entry) => {
-      const source = `.changeset/${entry.name}`;
+function git(root, args) {
+  return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+}
+
+function pendingChangesetIntent(root, packageName, baseSha) {
+  if (baseSha === undefined) return undefined;
+  if (!/^[0-9a-f]{40}$/.test(baseSha)) {
+    throw new Error("Compatibility feature base must be a full 40-character Git SHA");
+  }
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", baseSha, "HEAD"], {
+      cwd: root,
+      stdio: "pipe",
+    });
+  } catch {
+    throw new Error(`Compatibility feature base ${baseSha} must be an ancestor of HEAD`);
+  }
+  const addedPaths = git(root, [
+    "diff", "--name-only", "--diff-filter=A", `${baseSha}...HEAD`, "--", ".changeset/*.md",
+  ]).split("\n").filter((path) =>
+    path !== ".changeset/README.md" && /^\.changeset\/[^/]+\.md$/.test(path));
+  const changesets = addedPaths
+    .map((source) => {
       const parsed = parseChangeset(readFileSync(join(root, source), "utf8"), packageName);
       return parsed ? { ...parsed, source } : undefined;
     })
@@ -60,34 +77,113 @@ function changelogSection(root, candidateVersion) {
   const bodyStart = heading.index + heading[0].length;
   const tail = changelog.slice(bodyStart);
   const nextHeading = tail.search(/^##\s+/m);
-  return tail.slice(0, nextHeading < 0 ? undefined : nextHeading).trim();
+  const lines = tail.slice(0, nextHeading < 0 ? undefined : nextHeading)
+    .replaceAll("\r\n", "\n")
+    .split("\n");
+  while (lines[0]?.trim() === "") lines.shift();
+  while (lines.at(-1)?.trim() === "") lines.pop();
+  return lines.join("\n");
 }
 
-function headingSection(markdown, heading) {
-  const match = new RegExp(`^###\\s+${escapeRegExp(heading)}\\s*$`, "im").exec(markdown);
-  if (!match) return undefined;
-  const contentStart = match.index + match[0].length;
-  const tail = markdown.slice(contentStart);
-  const nextHeading = tail.search(/^#{1,3}\s+/m);
-  return tail.slice(0, nextHeading < 0 ? undefined : nextHeading).trim();
-}
-
-function hasConcreteFencedCode(markdown) {
-  if (!markdown) return false;
-  const fences = /(```|~~~)[^\n]*\n([\s\S]*?)\n\1/g;
-  for (const match of markdown.matchAll(fences)) {
-    const code = match[2].trim();
-    if (code.length >= 4 && !/^(?:\.\.\.|todo|tbd|before|after)$/i.test(code)) return true;
+function canonicalMinorChangelogEvidence(section, source) {
+  const lines = section.split("\n");
+  const evidence = [];
+  let inMinorChanges = false;
+  for (let index = 0; index < lines.length;) {
+    const line = lines[index];
+    if (/^###\s+/.test(line)) {
+      inMinorChanges = line === "### Minor Changes";
+      index += 1;
+      continue;
+    }
+    if (!inMinorChanges || !line.startsWith("- ")) {
+      index += 1;
+      continue;
+    }
+    const body = [line.slice(2)];
+    let canonical = true;
+    index += 1;
+    while (index < lines.length && !lines[index].startsWith("- ") && !/^###\s+/.test(lines[index])) {
+      if (!lines[index].startsWith("  ")) canonical = false;
+      else body.push(lines[index].slice(2));
+      index += 1;
+    }
+    if (canonical) evidence.push({ source, body: body.join("\n") });
   }
-  return false;
+  return evidence;
+}
+
+function isPlainSummary(line) {
+  return line.length > 0
+    && line === line.trim()
+    && !/^(?:#{1,6}\s|>|[-+*]\s|\d+\.\s|`{3,}|~{3,}|---$)/.test(line);
+}
+
+function fenceOpening(line) {
+  const match = /^(`{3,}|~{3,})(.*)$/.exec(line);
+  if (!match) return undefined;
+  return { marker: match[1][0], length: match[1].length };
+}
+
+function isFenceClosing(line, fence) {
+  const escapedMarker = escapeRegExp(fence.marker);
+  return new RegExp(`^${escapedMarker}{${fence.length},}\\s*$`).test(line);
+}
+
+function isConcreteCode(lines) {
+  const code = lines.join("\n").trim();
+  return code.length >= 4 && !/^(?:\.\.\.|todo|tbd|before|after)$/i.test(code);
+}
+
+function hasStructuredBreakingEvidence(markdown) {
+  const lines = markdown.replaceAll("\r\n", "\n").split("\n");
+  if (!isPlainSummary(lines[0] ?? "") || lines[1]?.trim() !== "") return false;
+
+  let phase = "introduction";
+  let fence;
+  const codeFences = { breaking: 0, adoption: 0 };
+  for (const line of lines.slice(2)) {
+    if (fence) {
+      if (line === "### Breaking changes" || line === "### Adoption") return false;
+      if (isFenceClosing(line, fence)) {
+        if (!isConcreteCode(fence.code)) return false;
+        codeFences[fence.phase] += 1;
+        fence = undefined;
+      } else {
+        fence.code.push(line);
+      }
+      continue;
+    }
+
+    const opening = fenceOpening(line);
+    if (opening) {
+      if (phase !== "breaking" && phase !== "adoption") return false;
+      fence = { ...opening, phase, code: [] };
+      continue;
+    }
+
+    if (/^#{1,6}(?:\s|$)/.test(line)) {
+      if (line === "### Breaking changes" && phase === "introduction") {
+        phase = "breaking";
+        continue;
+      }
+      if (line === "### Adoption" && phase === "breaking" && codeFences.breaking === 1) {
+        phase = "adoption";
+        continue;
+      }
+      return false;
+    }
+  }
+  return fence === undefined
+    && phase === "adoption"
+    && codeFences.breaking === 1
+    && codeFences.adoption === 1;
 }
 
 export function findBreakingChangeEvidence(releaseIntent) {
   if (releaseIntent?.releaseType !== "minor") return undefined;
   for (const evidence of releaseIntent.evidence ?? []) {
-    const breaking = headingSection(evidence.body, "Breaking changes");
-    const adoption = headingSection(evidence.body, "Adoption");
-    if (hasConcreteFencedCode(breaking) && hasConcreteFencedCode(adoption)) return evidence.source;
+    if (hasStructuredBreakingEvidence(evidence.body)) return evidence.source;
   }
   return undefined;
 }
@@ -97,17 +193,19 @@ export function readCompatibilityReleaseIntent({
   packageName,
   baselineVersion,
   candidateVersion,
+  baseSha,
 }) {
   const repositoryRoot = resolve(root);
   const comparison = compareSemver(candidateVersion, baselineVersion);
-  if (comparison === 0) return pendingChangesetIntent(repositoryRoot, packageName);
+  if (comparison === 0) return pendingChangesetIntent(repositoryRoot, packageName, baseSha);
 
   const releaseType = versionReleaseType(baselineVersion, candidateVersion);
   const body = changelogSection(repositoryRoot, candidateVersion);
+  const source = `CHANGELOG.md#${candidateVersion}`;
   return {
     releaseType,
-    evidence: body
-      ? [{ source: `CHANGELOG.md#${candidateVersion}`, body }]
+    evidence: body && releaseType === "minor"
+      ? canonicalMinorChangelogEvidence(body, source)
       : [],
   };
 }

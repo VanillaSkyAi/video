@@ -17,4 +17,5 @@ export function readCompatibilityReleaseIntent(options: {
   packageName: string;
   baselineVersion: string;
   candidateVersion: string;
+  baseSha?: string;
 }): CompatibilityReleaseIntent | undefined;

@@ -430,8 +430,9 @@ export function assertPatchCompatibility({
       if (!evidence) {
         throw new Error(
           "Breaking public API changes in a pre-1.0 minor require release evidence: "
-          + "the Breaking changes section must contain a concrete fenced before example, "
-          + "and the Adoption section must contain a concrete fenced after example. "
+          + "start with one plain summary line and a blank line; then the exact Breaking changes "
+          + "section must contain one concrete fenced before example, and the exact Adoption "
+          + "section must contain one concrete fenced after example. "
           + `Detected: ${breakingChanges.join("; ")}`,
         );
       }

@@ -108,6 +108,7 @@ try {
       packageName,
       baselineVersion,
       candidateVersion,
+      baseSha: process.env.VANILLASKY_COMPATIBILITY_BASE_SHA || undefined,
     }),
   });
   console.log(`Verified public API compatibility against npm latest ${baselineVersion}: ${compatibility.status}.`);

@@ -25,7 +25,11 @@ public API review.
   Those sections must include concrete fenced before and after code examples,
   respectively. Start a breaking Changeset with its one-line summary, followed
   by those headings, so Changesets preserves both as real headings in the
-  generated changelog. A `patch` Changeset never authorizes a breaking change.
+  generated changelog. The verifier accepts the configured Changesets
+  changelog's canonical two-space continuation indentation, but not headings
+  hidden inside code fences. On a feature PR, only a Changeset added since the
+  pull request's exact base commit can provide this evidence. A `patch`
+  Changeset never authorizes a breaking change.
 - An API prefixed with `experimental_` may change in a patch. Canonical examples
   must pin an exact package version when they use one.
 - Deprecated APIs remain usable until the next minor release. The `0.1`

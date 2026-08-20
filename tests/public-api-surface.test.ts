@@ -78,6 +78,7 @@ describe("frozen public API surface", () => {
 
   it("compares patch candidates with the published npm latest contract", () => {
     const verifier = readFileSync(resolve(root, "scripts/verify-public-api-surface.mjs"), "utf8");
+    const workflow = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
 
     expect(verifier).toContain("assertPatchCompatibility");
     expect(verifier).toContain('"@vanillaskyai/video@latest"');
@@ -89,6 +90,9 @@ describe("frozen public API surface", () => {
     expect(verifier).toContain("createPublicApiSignatureReport");
     expect(verifier).toContain("baselinePackageRoot");
     expect(verifier).toContain("candidateVersion");
+    expect(verifier).toContain("VANILLASKY_COMPATIBILITY_BASE_SHA");
+    expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain("VANILLASKY_COMPATIBILITY_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}");
   });
 
   it("documents the conservative limit of normalized signature comparison", () => {
