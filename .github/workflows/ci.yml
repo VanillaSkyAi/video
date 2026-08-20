@@ -30,7 +30,7 @@ jobs:
         env:
           CHANGESET_BASE_REF: ${{ github.event.pull_request.base.sha }}
         run: |
-          npm run changeset:status
+          npm run changeset:status -- --since "$CHANGESET_BASE_REF"
           npm run changeset:check
       - run: npm run registry:check
       - run: npm run lint

@@ -334,8 +334,9 @@ ${body}
     expect(workflow).not.toContain("CHANGESET_HEAD_BRANCH");
     expect(workflow).not.toContain("CHANGESET_BASE_REPOSITORY");
     expect(workflow).not.toContain("CHANGESET_HEAD_REPOSITORY");
-    expect(workflow.indexOf("npm run changeset:status")).toBeGreaterThanOrEqual(0);
-    expect(workflow.indexOf("npm run changeset:status")).toBeLessThan(workflow.indexOf("npm run changeset:check"));
+    const officialStatusCommand = 'npm run changeset:status -- --since "$CHANGESET_BASE_REF"';
+    expect(workflow).toContain(officialStatusCommand);
+    expect(workflow.indexOf(officialStatusCommand)).toBeLessThan(workflow.indexOf("npm run changeset:check"));
     expect(workflow).toContain("npm run changeset:check");
   });
 });
