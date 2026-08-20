@@ -29,8 +29,9 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           CHANGESET_BASE_REF: ${{ github.event.pull_request.base.sha }}
-          CHANGESET_HEAD_BRANCH: ${{ github.head_ref }}
-        run: npm run changeset:check
+        run: |
+          npm run changeset:status
+          npm run changeset:check
       - run: npm run registry:check
       - run: npm run lint
       - run: npm run typecheck

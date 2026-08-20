@@ -4,9 +4,20 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve } from "node:path";
+import { parseChangesetFile } from "@changesets/parse";
 
 const PACKAGE_NAME = "@vanillaskyai/video";
 const RELEASE_TYPES = ["patch", "minor", "major"];
+const PACKAGE_LIFECYCLE_SCRIPTS = new Set([
+  "install",
+  "postinstall",
+  "postpack",
+  "preinstall",
+  "prepack",
+  "prepare",
+  "prepublish",
+  "prepublishOnly",
+]);
 const PACKAGE_FILES = new Set([
   "CHANGELOG.md",
   "LICENSE",
@@ -25,24 +36,28 @@ const PACKAGE_PREFIXES = [
 ];
 
 function git(root, args) {
-  return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
-}
-
-function lines(value) {
-  return value ? value.split("\n").filter(Boolean) : [];
+  return execFileSync("git", args, { cwd: root, encoding: "utf8" });
 }
 
 function packageManifestSurface(manifest) {
   const surface = structuredClone(manifest);
   delete surface.devDependencies;
   delete surface.packageManager;
-  delete surface.scripts;
+  surface.scripts = Object.fromEntries(
+    Object.entries(surface.scripts ?? {}).filter(([name]) => PACKAGE_LIFECYCLE_SCRIPTS.has(name)),
+  );
   return surface;
 }
 
 function packageManifestChanged(root, baseRef) {
-  const before = JSON.parse(git(root, ["show", `${baseRef}:package.json`]));
-  const after = JSON.parse(git(root, ["show", "HEAD:package.json"]));
+  let before;
+  let after;
+  try {
+    before = JSON.parse(git(root, ["show", `${baseRef}:package.json`]));
+    after = JSON.parse(git(root, ["show", "HEAD:package.json"]));
+  } catch {
+    return true;
+  }
   return JSON.stringify(packageManifestSurface(before)) !== JSON.stringify(packageManifestSurface(after));
 }
 
@@ -55,46 +70,87 @@ function isPackagePath(root, baseRef, path) {
   return !relative.includes("/") || relative.startsWith("reference/");
 }
 
-function parseChangeset(path, contents) {
-  const normalized = contents.replaceAll("\r\n", "\n");
-  const frontmatterStart = "---\n";
-  const frontmatterEnd = normalized.indexOf("---\n", frontmatterStart.length);
-  if (!normalized.startsWith(frontmatterStart) || frontmatterEnd < 0) {
-    throw new Error(`Changeset ${path} must contain valid YAML frontmatter`);
+function parseNameStatus(output) {
+  const fields = output.split("\0");
+  if (fields.at(-1) === "") fields.pop();
+  const changes = [];
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index++];
+    const pathCount = status.startsWith("R") || status.startsWith("C") ? 2 : 1;
+    const paths = fields.slice(index, index + pathCount);
+    if (!status || paths.length !== pathCount || paths.some((path) => !path)) {
+      throw new Error("Git returned malformed NUL-delimited name-status output");
+    }
+    changes.push({ paths, status });
+    index += pathCount;
   }
-  const frontmatter = normalized.slice(frontmatterStart.length, frontmatterEnd);
-  const body = normalized.slice(frontmatterEnd + frontmatterStart.length);
-  if (!body.trim()) throw new Error(`Changeset ${path} must explain the change`);
+  return changes;
+}
 
-  const releases = [];
-  for (const rawLine of frontmatter.split("\n")) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const release = /^(?:"([^"]+)"|'([^']+)'|([^:]+)):\s*(patch|minor|major)\s*$/.exec(line);
-    if (!release) throw new Error(`Changeset ${path} contains an invalid package release declaration`);
-    const name = (release[1] ?? release[2] ?? release[3]).trim();
-    if (name !== PACKAGE_NAME) throw new Error(`Changeset ${path} names unsupported package ${name}`);
-    releases.push(release[4]);
+function isChangesetRecord(path) {
+  return path !== ".changeset/README.md" && /^\.changeset\/[^/]+\.md$/.test(path);
+}
+
+function assertPendingChangesetsAreImmutable(changes) {
+  const actions = new Map([
+    ["D", "deleted"],
+    ["M", "modified"],
+    ["R", "renamed"],
+    ["T", "modified"],
+  ]);
+  for (const change of changes) {
+    const action = actions.get(change.status[0]);
+    if (action && isChangesetRecord(change.paths[0])) {
+      throw new Error(`Base-owned pending Changeset ${change.paths[0]} was ${action}; pending release records are immutable`);
+    }
   }
-  return releases;
+}
+
+function assertSummaryFormat(path, contents) {
+  const normalized = contents.replaceAll("\r\n", "\n");
+  const contentLines = normalized.split("\n");
+  const frontmatterEnd = contentLines.findIndex((line, index) => index > 0 && line.trim() === "---");
+  const bodyLines = contentLines.slice(frontmatterEnd + 1);
+  while (bodyLines[0]?.trim() === "") bodyLines.shift();
+  const summary = bodyLines[0]?.trim();
+  if (!summary || /^#{1,6}(?:\s|$)/.test(summary)) {
+    throw new Error(`Changeset ${path} must start its body with a one-line summary`);
+  }
+  if (bodyLines.length > 1 && bodyLines[1].trim() !== "") {
+    throw new Error(`Changeset ${path} must put a blank line between its one-line summary and details`);
+  }
+}
+
+function parseChangeset(path, contents) {
+  let parsed;
+  try {
+    parsed = parseChangesetFile(contents);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Changeset ${path} failed official validation: ${detail}`, { cause: error });
+  }
+  assertSummaryFormat(path, contents);
+  return parsed.releases.map((release) => {
+    if (release.name !== PACKAGE_NAME) throw new Error(`Changeset ${path} names unsupported package ${release.name}`);
+    if (!RELEASE_TYPES.includes(release.type)) {
+      throw new Error(`Changeset ${path} contains invalid version type ${release.type} for ${PACKAGE_NAME}`);
+    }
+    return release.type;
+  });
 }
 
 export function verifyChangesetGovernance({
   root,
   baseRef = process.env.CHANGESET_BASE_REF ?? "origin/main",
-  headBranch = process.env.CHANGESET_HEAD_BRANCH,
 } = {}) {
   const repositoryRoot = resolve(root ?? fileURLToPath(new URL("..", import.meta.url)));
-  const branch = headBranch || git(repositoryRoot, ["branch", "--show-current"]);
-  if (branch.startsWith("changeset-release/")) {
-    return { exempt: true, reason: "version-packages-branch" };
-  }
-
   const comparison = `${baseRef}...HEAD`;
-  const changedPaths = lines(git(repositoryRoot, ["diff", "--name-only", "--diff-filter=ACMR", comparison]));
-  const changesets = lines(
-    git(repositoryRoot, ["diff", "--name-only", "--diff-filter=A", comparison, "--", ".changeset/*.md"]),
-  ).filter((path) => path !== ".changeset/README.md" && /^\.changeset\/[^/]+\.md$/.test(path));
+  const changes = parseNameStatus(git(repositoryRoot, ["diff", "--name-status", "-z", "--find-renames", comparison]));
+  assertPendingChangesetsAreImmutable(changes);
+  const changedPaths = changes.flatMap((change) => change.paths);
+  const changesets = changes
+    .filter((change) => change.status === "A" && isChangesetRecord(change.paths[0]))
+    .map((change) => change.paths[0]);
   if (changesets.length === 0) {
     throw new Error("Every pull request must add a new changeset; use `npm run changeset` or `npm run changeset -- --empty`");
   }
@@ -111,8 +167,7 @@ export function verifyChangesetGovernance({
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   try {
     const result = verifyChangesetGovernance({});
-    if (result.exempt) console.log("Changeset governance skipped for a generated Version Packages branch.");
-    else console.log(`Changeset governance passed with ${result.changesets.length} new changeset(s).`);
+    console.log(`Changeset governance passed with ${result.changesets.length} new changeset(s).`);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

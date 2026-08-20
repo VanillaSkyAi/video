@@ -19,8 +19,15 @@ Changesets records the release intent and summary with each pull request. This
 governance step does not yet replace the explicit candidate preparation and
 publishing process below. Package-affecting pull requests name
 `@vanillaskyai/video` with a `patch`, `minor`, or `major` bump; repository-only
-changes use an empty Changeset. Generated `changeset-release/*` Version
-Packages branches are exempt because they consume the pending files.
+changes use an empty Changeset. No branch is currently exempt. A future Version
+Packages generator must introduce its exemption together with canonical
+repository, exact branch, and GitHub Actions bot provenance checks.
+
+The current `release:prepare` command does not read, release, or consume pending
+Changeset records. Pending records **must be consumed by the Version Packages
+lifecycle pull request before any next release is tagged or published**. Until
+that lifecycle is merged, do not use the explicit preparation path to publish a
+candidate with pending Changesets.
 
 ## Before creating a release tag
 
