@@ -43,8 +43,8 @@ describe("packed provider package compatibility", () => {
   });
 
   it("uses the declared npm CLI in every parallel CI job", () => {
-    expect(ciWorkflow.match(/Install the locked npm CLI/g)).toHaveLength(6);
-    expect(ciWorkflow.match(/npm install --global npm@11\.17\.0/g)).toHaveLength(6);
+    expect(ciWorkflow.match(/Install the locked npm CLI/g)).toHaveLength(7);
+    expect(ciWorkflow.match(/npm install --global npm@11\.17\.0/g)).toHaveLength(7);
   });
 
   it("clears every supported real provider key before creating child environments", () => {

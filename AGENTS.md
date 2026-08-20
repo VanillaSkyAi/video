@@ -94,8 +94,9 @@ tooling, tests, workflows, governance, and maintainer documentation use an
 empty Changeset. The generated `changeset-release/main` branch is the only
 exception. CI must prove its canonical same-repository identity, exact GitHub
 metadata, deterministic generated-commit identity and one-commit shape from the
-exact `main` base, and byte-for-byte reproducible generated tree. Base-owned pending Changeset
-files remain immutable on every ordinary branch.
+exact `main` base, and byte-for-byte reproducible generated tree. Base-owned
+pending Changeset files, `.changeset/pre.json`, and `.changeset/pre/*.md`
+evidence remain immutable on every ordinary branch.
 
 The Version Packages workflow prepares beta candidate files but does not
 publish, tag, or create its pull request. A normal authenticated maintainer or

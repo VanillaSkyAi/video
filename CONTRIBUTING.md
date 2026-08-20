@@ -56,7 +56,8 @@ npm run changeset:check
 
 Pending Changesets are immutable after merge. The Version Packages workflow
 consumes them on a dedicated beta candidate branch; contributors and ordinary
-pull requests never edit or remove them.
+pull requests never edit or remove them. That immutability also covers the beta
+mode in `.changeset/pre.json` and generated `.changeset/pre/*.md` evidence.
 
 ## Maintainer guides
 

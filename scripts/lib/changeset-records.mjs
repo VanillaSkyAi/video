@@ -14,15 +14,12 @@ export function listPendingChangesetPaths({ root }) {
     .sort();
 }
 
-export function assertChangesetRecordFile({ root, path, ref = "HEAD" }) {
-  if (path === ".changeset/README.md" || !CHANGESET_RECORD.test(path)) {
-    throw new Error(`Changeset record path is invalid: ${path}`);
-  }
+export function assertCommittedRegularFile({ root, path, ref = "HEAD", label = "File" }) {
   const repositoryRoot = resolve(root);
   const absolutePath = resolve(repositoryRoot, path);
   const stat = lstatSync(absolutePath);
   if (!stat.isFile() || stat.isSymbolicLink()) {
-    throw new Error(`Changeset ${path} must be a regular file, not a symlink or another file type`);
+    throw new Error(`${label} ${path} must be a regular file, not a symlink or another file type`);
   }
   const treeEntry = execFileSync("git", ["ls-tree", "-z", ref, "--", path], {
     cwd: repositoryRoot,
@@ -30,8 +27,15 @@ export function assertChangesetRecordFile({ root, path, ref = "HEAD" }) {
   });
   const match = /^(\d+) (\S+) ([0-9a-f]+)\t([^\0]+)\0$/.exec(treeEntry);
   if (!match || match[1] !== "100644" || match[2] !== "blob" || match[4] !== path) {
-    throw new Error(`Changeset ${path} must be a committed 100644 regular file at ${ref}`);
+    throw new Error(`${label} ${path} must be a committed 100644 regular file at ${ref}`);
   }
+}
+
+export function assertChangesetRecordFile({ root, path, ref = "HEAD" }) {
+  if (path === ".changeset/README.md" || !CHANGESET_RECORD.test(path)) {
+    throw new Error(`Changeset record path is invalid: ${path}`);
+  }
+  assertCommittedRegularFile({ root, path, ref, label: "Changeset" });
 }
 
 export function assertNoPendingChangesets({ root }) {

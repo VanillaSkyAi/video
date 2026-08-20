@@ -15,7 +15,9 @@ branch name, fork, stale base, extra commit, or edited generated file fails.
 
 Do not modify, rename, or delete a pending Changeset already owned by `main`.
 The verified Version Packages branch is the only path allowed to consume those
-records.
+records. The committed `.changeset/pre.json` mode and archived
+`.changeset/pre/*.md` release evidence are immutable on ordinary branches; only
+the byte-reproduced generated branch may update them.
 
 Start the body with a one-line summary. Put any longer explanation after a
 blank line so the generated changelog keeps a readable summary bullet.

@@ -31,6 +31,12 @@ shape from the exact current `main` base, and regenerating from that base
 produces the same tree byte-for-byte. The fixed commit fields constrain the
 generated shape; they do not independently prove GitHub Actions provenance.
 
+CI verifies that generated tree from the exact base commit and its locked
+Changesets toolchain before any job installs or executes head package code. All
+head-executing jobs depend on that safety gate, and the required `verify` check
+fails explicitly when the gate fails. Ordinary pull requests retain the normal
+install-then-governance path.
+
 This lifecycle prepares and reviews version files only. It does **not** publish,
 tag, create a GitHub release, or deploy the site. The existing tag-triggered
 publisher remains blocked until the next, separately reviewed main-only publish

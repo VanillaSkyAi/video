@@ -6,4 +6,11 @@ export function assertChangesetRecordFile(options: {
   ref?: string;
 }): void;
 
+export function assertCommittedRegularFile(options: {
+  root: string;
+  path: string;
+  ref?: string;
+  label?: string;
+}): void;
+
 export function assertNoPendingChangesets(options: { root: string }): void;
