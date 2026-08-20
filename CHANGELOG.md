@@ -6,6 +6,12 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 <!-- Add release notes here before running release:prepare. -->
 
+## 0.1.1-beta.0
+
+### Patch Changes
+
+- 66e8e95: Enforce pre-1.0 compatibility intent with structurally parsed release evidence.
+
 ## 0.1.0
 
 Initial beta release for `@vanillaskyai/video`.
