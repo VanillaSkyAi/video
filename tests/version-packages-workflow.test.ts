@@ -16,6 +16,7 @@ describe("Version Packages workflow", () => {
     expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain("persist-credentials: false");
     expect(workflow).toContain("github.ref == 'refs/heads/main'");
+    expect(workflow).toContain('test "$GITHUB_REPOSITORY" = "VanillaSkyAi/video"');
     expect(workflow).toContain("github.sha");
     expect(workflow).toContain("origin/main");
     expect(workflow).not.toMatch(/npm publish|npm dist-tag|git tag|gh release/);
@@ -26,13 +27,37 @@ describe("Version Packages workflow", () => {
 
   it("passes credentials only to a race-safe exact-branch push", () => {
     const workflow = readFileSync(workflowPath, "utf8");
+    const publishJob = workflow.slice(workflow.indexOf("  publish:"));
 
+    expect(workflow).toMatch(/permissions:\n\s+contents: read/);
+    expect(publishJob).toContain("permissions:\n      contents: write");
+    expect(publishJob).toContain("needs: prepare");
+    expect(publishJob).not.toContain("npm ci");
+    expect(publishJob).not.toContain("npm run");
+    expect(publishJob).not.toContain("actions/setup-node");
     expect(workflow.match(/GITHUB_TOKEN:/g)).toHaveLength(1);
     expect(workflow).toContain("--force-with-lease=refs/heads/changeset-release/main:");
     expect(workflow).toContain("HEAD:refs/heads/changeset-release/main");
     expect(workflow).not.toContain("HEAD:main");
     expect(workflow).toContain("scripts/verify-version-packages-pr.mjs");
     expect(workflow).toContain("github-actions[bot]");
+  });
+
+  it("hands a checksummed patch to a write-only job that validates an allowlisted regular-file tree", () => {
+    const workflow = readFileSync(workflowPath, "utf8");
+
+    expect(workflow).toContain("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+    expect(workflow).toContain("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093");
+    expect(workflow).toContain("version-packages.patch");
+    expect(workflow).toContain("handoff_digest: ${{ steps.handoff.outputs.digest }}");
+    expect(workflow).toContain("EXPECTED_HANDOFF_DIGEST: ${{ needs.prepare.outputs.handoff_digest }}");
+    expect(workflow).toContain("handoff.sha256");
+    expect(workflow).toContain("sha256sum -c handoff.sha256");
+    expect(workflow).toContain("! -type f");
+    expect(workflow).toContain("write-tree");
+    expect(workflow).toContain("100644");
+    expect(workflow).toContain('[[ "$status" == "M" ]]');
+    expect(workflow).toContain("Unexpected generated path");
   });
 
   it("publishes a direct compare URL without opening or merging a PR", () => {

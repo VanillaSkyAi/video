@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: version-packages-main
@@ -16,6 +16,11 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.prepare.outputs.changed }}
+      handoff_digest: ${{ steps.handoff.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -36,6 +41,7 @@ jobs:
         env:
           EXPECTED_MAIN_SHA: ${{ github.sha }}
         run: |
+          test "$GITHUB_REPOSITORY" = "VanillaSkyAi/video"
           test "${{ github.ref == 'refs/heads/main' }}" = "true"
           test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
           git fetch --no-tags origin main
@@ -84,16 +90,151 @@ jobs:
           fi
           echo "sha=$remote_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Push exact dedicated branch
+      - name: Build checksummed write handoff
         if: steps.prepare.outputs.changed == 'true'
+        id: handoff
+        run: |
+          handoff="$RUNNER_TEMP/version-packages-handoff"
+          mkdir "$handoff"
+          git diff --full-index --binary --no-renames "${{ github.sha }}" HEAD > "$handoff/version-packages.patch"
+          printf '%s\n' "${{ github.sha }}" > "$handoff/base-sha"
+          git rev-parse 'HEAD^{tree}' > "$handoff/tree-sha"
+          printf '%s\n' "${{ steps.remote.outputs.sha }}" > "$handoff/remote-sha"
+          cd "$handoff"
+          sha256sum base-sha remote-sha tree-sha version-packages.patch > handoff.sha256
+          echo "digest=$(sha256sum handoff.sha256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload checksummed write handoff
+        if: steps.prepare.outputs.changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: version-packages-handoff
+          path: ${{ runner.temp }}/version-packages-handoff
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    if: needs.prepare.outputs.changed == 'true'
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download checksummed write handoff
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: version-packages-handoff
+          path: ${{ runner.temp }}/version-packages-handoff
+
+      - name: Validate handoff and reconstruct generated commit
+        id: candidate
+        env:
+          EXPECTED_HANDOFF_DIGEST: ${{ needs.prepare.outputs.handoff_digest }}
+          EXPECTED_MAIN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "VanillaSkyAi/video"
+          test "${{ github.ref == 'refs/heads/main' }}" = "true"
+          handoff="$RUNNER_TEMP/version-packages-handoff"
+          unexpected_type="$(find "$handoff" -mindepth 1 -maxdepth 1 ! -type f -print -quit)"
+          test -z "$unexpected_type"
+          actual_files="$(find "$handoff" -mindepth 1 -maxdepth 1 -type f -exec basename {} \; | sort)"
+          expected_files="$(printf '%s\n' base-sha handoff.sha256 remote-sha tree-sha version-packages.patch | sort)"
+          test "$actual_files" = "$expected_files"
+
+          base_sha="$(tr -d '\n' < "$handoff/base-sha")"
+          tree_sha="$(tr -d '\n' < "$handoff/tree-sha")"
+          expected_remote="$(tr -d '\n' < "$handoff/remote-sha")"
+          test "$(wc -l < "$handoff/base-sha")" -eq 1
+          test "$(wc -l < "$handoff/tree-sha")" -eq 1
+          test "$(wc -l < "$handoff/remote-sha")" -eq 1
+          [[ "$base_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$tree_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ -z "$expected_remote" || "$expected_remote" =~ ^[0-9a-f]{40}$ ]]
+          test "$base_sha" = "$EXPECTED_MAIN_SHA"
+
+          [[ "$EXPECTED_HANDOFF_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          test "$(sha256sum "$handoff/handoff.sha256" | cut -d ' ' -f 1)" = "$EXPECTED_HANDOFF_DIGEST"
+          checksum_files="$(awk '{print $2}' "$handoff/handoff.sha256")"
+          test "$checksum_files" = "$(printf '%s\n' base-sha remote-sha tree-sha version-packages.patch)"
+          cd "$handoff"
+          sha256sum -c handoff.sha256
+
+          publish_root="$RUNNER_TEMP/version-packages-publish"
+          git clone --quiet --no-checkout https://github.com/VanillaSkyAi/video.git "$publish_root"
+          git -C "$publish_root" fetch --no-tags origin main:refs/remotes/origin/main
+          test "$(git -C "$publish_root" rev-parse refs/remotes/origin/main)" = "$base_sha"
+
+          current_remote=""
+          if git -C "$publish_root" fetch --no-tags origin \
+            refs/heads/changeset-release/main:refs/remotes/origin/changeset-release/main; then
+            current_remote="$(git -C "$publish_root" rev-parse refs/remotes/origin/changeset-release/main)"
+          fi
+          test "$current_remote" = "$expected_remote"
+
+          git -C "$publish_root" checkout --quiet --detach "$base_sha"
+          git -C "$publish_root" apply --index --binary --whitespace=error-all "$handoff/version-packages.patch"
+          changed_count=0
+          while IFS= read -r -d '' status && IFS= read -r -d '' path; do
+            changed_count=$((changed_count + 1))
+            case "$status" in
+              A|M|D) ;;
+              *) echo "Unexpected generated status $status for $path" >&2; exit 1 ;;
+            esac
+            case "$path" in
+              .changeset/pre.json)
+                [[ "$status" == "A" || "$status" == "M" ]] ;;
+              .changeset/pre/*.md)
+                record="${path#.changeset/pre/}"
+                [[ "$record" != */* && "$status" == "A" ]] ;;
+              .changeset/*.md)
+                record="${path#.changeset/}"
+                [[ "$record" != */* && "$record" != "README.md" && "$status" == "D" ]] ;;
+              CHANGELOG.md|PUBLIC-API.md|README.md|package-lock.json|package.json|\
+              docs/getting-started.md|docs/integrate-nextjs.md|skills/vanillasky/SKILL.md|\
+              examples/nextjs-quickstart/package.json|examples/react-vite/package.json|\
+              examples/server-integrations/package.json|tests/fixtures/nextjs-provider-app/package.json)
+                [[ "$status" == "M" ]] ;;
+              *) echo "Unexpected generated path $path" >&2; exit 1 ;;
+            esac
+            if [[ "$status" != "D" ]]; then
+              test -f "$publish_root/$path"
+              test ! -L "$publish_root/$path"
+              test "$(git -C "$publish_root" ls-files -s -- "$path" | awk '{print $1}')" = "100644"
+            fi
+          done < <(git -C "$publish_root" diff --cached --name-status -z --no-renames "$base_sha")
+          test "$changed_count" -gt 0
+          test "$(git -C "$publish_root" write-tree)" = "$tree_sha"
+
+          git -C "$publish_root" -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            -c commit.gpgsign=false commit -m "chore: version packages"
+          test "$(git -C "$publish_root" rev-parse 'HEAD^')" = "$base_sha"
+          echo "head_sha=$(git -C "$publish_root" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "remote_sha=$expected_remote" >> "$GITHUB_OUTPUT"
+          echo "repository=$publish_root" >> "$GITHUB_OUTPUT"
+
+      - name: Push exact dedicated branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REMOTE_SHA: ${{ steps.remote.outputs.sha }}
+          GENERATED_HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
+          PUBLISH_REPOSITORY: ${{ steps.candidate.outputs.repository }}
+          REMOTE_SHA: ${{ steps.candidate.outputs.remote_sha }}
         run: |
-          git fetch --no-tags origin main
-          test "$(git rev-parse origin/main)" = "${{ github.sha }}"
+          set -euo pipefail
+          git -C "$PUBLISH_REPOSITORY" fetch --no-tags origin main:refs/remotes/origin/main
+          test "$(git -C "$PUBLISH_REPOSITORY" rev-parse refs/remotes/origin/main)" = "${{ github.sha }}"
+          current_remote=""
+          if git -C "$PUBLISH_REPOSITORY" fetch --no-tags origin \
+            refs/heads/changeset-release/main:refs/remotes/origin/changeset-release/main; then
+            current_remote="$(git -C "$PUBLISH_REPOSITORY" rev-parse refs/remotes/origin/changeset-release/main)"
+          fi
+          test "$current_remote" = "$REMOTE_SHA"
+          test "$(git -C "$PUBLISH_REPOSITORY" rev-parse HEAD)" = "$GENERATED_HEAD_SHA"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64)"
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" push origin \
+          git -C "$PUBLISH_REPOSITORY" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" push origin \
             --force-with-lease=refs/heads/changeset-release/main:"$REMOTE_SHA" \
             HEAD:refs/heads/changeset-release/main
           echo "Open or refresh the verified Version Packages PR:" >> "$GITHUB_STEP_SUMMARY"
