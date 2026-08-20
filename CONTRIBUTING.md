@@ -30,6 +30,33 @@ source.
 Provider credentials and customer secrets must never enter browser bundles,
 video inputs, fixtures, or event logs.
 
+## Changesets
+
+Every pull request must add a Changeset file. For package behavior, bundled
+source, public package documentation, or package metadata, run:
+
+```bash
+npm run changeset
+```
+
+Select `@vanillaskyai/video` and choose `patch`, `minor`, or `major`. Use
+`npm run changeset -- --empty` for repository-only tooling, tests, workflows,
+maintainer documentation, or governance. No branch is currently exempt. A
+future Version Packages generator must introduce its exemption together with
+canonical repository, exact branch, and GitHub Actions bot provenance checks.
+Start each Changeset body with a one-line summary; put details and any migration
+headings after a blank line. Before opening a pull request, commit the Changeset
+and run:
+
+```bash
+npm run changeset:status
+npm run changeset:check
+```
+
+Pending Changesets are immutable after merge. The current `release:prepare`
+command does not consume them; they must be consumed by the Version Packages
+lifecycle pull request before the next release.
+
 ## Maintainer guides
 
 - [Acceptance](docs/maintainers/acceptance.md) defines the deterministic and live-provider

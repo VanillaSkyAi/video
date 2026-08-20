@@ -88,6 +88,16 @@ installed tarball. Stable releases require package, tag, changelog, artifact,
 and public-site coherence. The site owns its private adoption workflow; keep
 its automation and credentials out of this public SDK repository.
 
+Every ordinary pull request must add a Changeset. Package-affecting work names
+`@vanillaskyai/video` with a `patch`, `minor`, or `major` bump; repository-only
+tooling, tests, workflows, governance, and maintainer documentation use an
+empty Changeset. No branch is currently exempt. A future Version Packages
+generator must introduce its narrow exemption together with canonical
+repository, exact branch, and GitHub Actions bot provenance checks.
+Base-owned pending Changeset files are immutable. The current `release:prepare`
+path does not consume them; a Version Packages lifecycle pull request must
+consume them before any next release.
+
 Never publish, tag, create a release, move dist-tags, modify production secrets,
 or deploy as an implicit side effect of a local verification task.
 

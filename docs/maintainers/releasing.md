@@ -15,6 +15,20 @@ The current automation is intentionally scoped to the `0.x` public beta line:
 before a stable `1.0.0`, remove the beta-only release-note and compatibility
 checks in a separately reviewed change.
 
+Changesets records the release intent and summary with each pull request. This
+governance step does not yet replace the explicit candidate preparation and
+publishing process below. Package-affecting pull requests name
+`@vanillaskyai/video` with a `patch`, `minor`, or `major` bump; repository-only
+changes use an empty Changeset. No branch is currently exempt. A future Version
+Packages generator must introduce its exemption together with canonical
+repository, exact branch, and GitHub Actions bot provenance checks.
+
+The current `release:prepare` command does not read, release, or consume pending
+Changeset records. Pending records **must be consumed by the Version Packages
+lifecycle pull request before any next release is tagged or published**. Until
+that lifecycle is merged, do not use the explicit preparation path to publish a
+candidate with pending Changesets.
+
 ## Before creating a release tag
 
 `VanillaSkyAi/video` is the canonical repository. npm publishing uses the
