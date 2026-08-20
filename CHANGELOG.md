@@ -4,7 +4,10 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
-<!-- Add release notes for the next version here. -->
+- Documents provider reasoning and effort controls for planning: models that
+  reason by default add that time directly to the first generated scene, so
+  hosts that want a video to start quickly should disable extended reasoning
+  and tune effort against `timeToFirstSceneMs` and `rejectedSceneCount`.
 
 ## 0.2.0
 
