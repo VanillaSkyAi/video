@@ -1,6 +1,6 @@
 # VanillaSky Video 0.2 public API
 
-Status: frozen public beta contract for `0.2.0`.
+Status: frozen public beta contract for `0.3.0`.
 
 This document defines the API that may enter the fresh
 `@vanillaskyai/video` package. An export not listed here is internal. Tests and

@@ -4,6 +4,8 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
+## 0.3.0
+
 - Documents closer eligibility: a template may close a video only when its
   `jobs` include `"ask"` or `"payoff"`, with the catalog filter an application
   can use to constrain how its videos end.
