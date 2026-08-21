@@ -99,7 +99,6 @@ function PlayerIcon({ name, size = 22 }: { name: PlayerIconName; size?: number }
     strokeWidth: 2,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
-    "aria-hidden": true,
   };
 
   if (name === "play") {
@@ -189,7 +188,7 @@ export function VideoPlayerRuntime({
     if (!Context) return;
     const context = new Context();
     context.resume().catch(Boolean);
-    import("./control-visibility.js").then((output) => output.default(audio, context, stateRef.current.config?.audio?.volume ?? 1));
+    import("./control-visibility.js").then((output) => output.default(audio, context)).catch(() => context.close());
   };
 
   if (stream !== activeStream) {
@@ -670,6 +669,7 @@ export function VideoPlayerRuntime({
           key={config.audio.audioUrl}
           ref={audioRef}
           src={config.audio.audioUrl}
+          data-v={config.audio.volume}
           autoPlay={isPlaying}
           muted={isMuted}
           preload="auto"

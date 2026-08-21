@@ -887,8 +887,7 @@ describe("VideoPlayer", () => {
     };
     const view = render(createElement(VideoPlayer, {
       video,
-      autoPlay: false,
-      startMuted: false,
+      playbackMode: "autoplay-after-interaction",
     }));
 
     fireEvent.click(view.getByRole("button", { name: "Play video with sound" }));
@@ -905,8 +904,38 @@ describe("VideoPlayer", () => {
     expect(gain.value).toBe(0);
     expect(pause).toHaveBeenCalled();
 
+    view.rerender(createElement(VideoPlayer, {
+      video: {
+        ...video,
+        audio: { ...video.audio!, audioUrl: "data:audio/wav;base64,VklGRg==", volume: 0.4 },
+      },
+      playbackMode: "autoplay-after-interaction",
+    }));
+    await waitFor(() => expect(createMediaElementSource).toHaveBeenCalledTimes(2));
+    expect(gain.value).toBe(0.4);
+    expect(disconnect).toHaveBeenCalledTimes(2);
+    expect(close).not.toHaveBeenCalled();
+
     view.unmount();
-    await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(4));
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes a primed audio context when the soundtrack disappears before lazy attachment", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "volume", "get").mockReturnValue(1);
+    vi.spyOn(HTMLMediaElement.prototype, "volume", "set").mockImplementation(() => undefined);
+    const close = vi.fn().mockResolvedValue(undefined);
+    const createMediaElementSource = vi.fn();
+    const audio = document.createElement("audio");
+    audio.src = "data:audio/wav;base64,UklGRg==";
+    const output = await import("../src/player/control-visibility");
+
+    output.default(audio, {
+      close,
+      createMediaElementSource,
+    } as unknown as AudioContext);
+
+    expect(createMediaElementSource).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalledTimes(1);
   });
 
@@ -915,11 +944,15 @@ describe("VideoPlayer", () => {
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     vi.spyOn(HTMLMediaElement.prototype, "volume", "get").mockReturnValue(1);
     vi.spyOn(HTMLMediaElement.prototype, "volume", "set").mockImplementation(() => undefined);
-    const createMediaElementSource = vi.fn();
+    const close = vi.fn().mockResolvedValue(undefined);
+    const gain = { value: 1 };
+    const createMediaElementSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }));
     class FakeAudioContext {
+      readonly destination = {};
       readonly resume = vi.fn().mockResolvedValue(undefined);
-      readonly close = vi.fn().mockResolvedValue(undefined);
+      readonly close = close;
       readonly createMediaElementSource = createMediaElementSource;
+      readonly createGain = vi.fn(() => ({ gain, connect: vi.fn(), disconnect: vi.fn() }));
     }
     vi.stubGlobal("AudioContext", FakeAudioContext);
 
@@ -954,7 +987,20 @@ describe("VideoPlayer", () => {
     fireEvent.click(view.getByRole("button", { name: "Play video with sound" }));
     await waitFor(() => expect(play).toHaveBeenCalled());
     expect(createMediaElementSource).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
     expect(view.getByTestId("video-player").getAttribute("data-playing")).toBe("true");
+
+    view.rerender(createElement(VideoPlayer, {
+      video: {
+        ...video,
+        audio: { ...video.audio!, audioUrl: "data:audio/wav;base64,UklGRg==" },
+      },
+      autoPlay: false,
+      startMuted: false,
+    }));
+    await waitFor(() => expect(createMediaElementSource).toHaveBeenCalledTimes(1));
+    expect(gain.value).toBe(0.6);
+    expect(close).not.toHaveBeenCalled();
   });
 
   it("pauses the player when the browser blocks audible autoplay", async () => {

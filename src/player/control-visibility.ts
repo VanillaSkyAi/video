@@ -3,12 +3,17 @@ import { createFullscreenController, type FullscreenController } from "./fullscr
 const STYLE_ID = "vanillasky-player-control-visibility";
 
 interface SoundtrackOutput {
-  context: AudioContext;
   source: MediaElementAudioSourceNode;
   gain: GainNode;
 }
 
-const outputs = new Map<HTMLAudioElement, SoundtrackOutput>();
+interface SoundtrackPlayer {
+  context: AudioContext;
+  audio?: HTMLAudioElement;
+  output?: SoundtrackOutput;
+}
+
+const soundtrackPlayers = new Map<HTMLElement, SoundtrackPlayer>();
 const fullscreenControllers = new Map<HTMLElement, FullscreenController>();
 
 export async function togglePlayerFullscreen(container: HTMLElement, onModeChange: (mode: "none" | "native" | "fallback") => void): Promise<void> {
@@ -20,22 +25,58 @@ export async function togglePlayerFullscreen(container: HTMLElement, onModeChang
   await controller.toggle();
 }
 
-function dispose(audio: HTMLAudioElement): void {
-  const output = outputs.get(audio);
-  if (!output) return;
-  output.source.disconnect();
-  output.gain.disconnect();
-  void output.context.close();
-  outputs.delete(audio);
-  delete audio.dataset.audioOutput;
-  Reflect.deleteProperty(audio, "volume");
+function detachSoundtrack(player: SoundtrackPlayer): void {
+  player.output?.source.disconnect();
+  player.output?.gain.disconnect();
+  if (player.audio) {
+    delete player.audio.dataset.audioOutput;
+    if (player.output) Reflect.deleteProperty(player.audio, "volume");
+  }
+  delete player.audio;
+  delete player.output;
 }
 
-export default function attachSoundtrack(audio: HTMLAudioElement, context: AudioContext, initialVolume: number): void {
-  const existing = outputs.get(audio);
+function routeSoundtrack(container: HTMLElement, player: SoundtrackPlayer, audio: HTMLAudioElement): void {
+  if (player.audio === audio) return;
+  detachSoundtrack(player);
+  player.audio = audio;
+  audio.dataset.audioOutput = "true";
+  const url = new URL(audio.currentSrc || audio.src, document.baseURI);
+  if (url.origin !== location.origin && url.protocol !== "blob:" && url.protocol !== "data:") return;
+  try {
+    const source = player.context.createMediaElementSource(audio);
+    const gain = player.context.createGain();
+    let volume = Number(audio.dataset.v ?? 1);
+    gain.gain.value = volume;
+    source.connect(gain);
+    gain.connect(player.context.destination);
+    Object.defineProperty(audio, "volume", {
+      configurable: true,
+      get: () => volume,
+      set: (next: number) => {
+        volume = next;
+        gain.gain.value = next;
+      },
+    });
+    player.output = { source, gain };
+  } catch {
+    detachSoundtrack(player);
+    void player.context.close();
+    soundtrackPlayers.delete(container);
+  }
+}
+
+export default function attachSoundtrack(audio: HTMLAudioElement, context: AudioContext): void {
+  const container = audio.closest<HTMLElement>('[data-testid="video-player"]');
+  if (!container?.isConnected || !audio.isConnected) {
+    void context.close();
+    return;
+  }
+  const existing = soundtrackPlayers.get(container);
   if (existing) {
     void context.close();
     void existing.context.resume().catch(() => undefined);
+    routeSoundtrack(container, existing, audio);
     return;
   }
   const original = audio.volume;
@@ -47,45 +88,35 @@ export default function attachSoundtrack(audio: HTMLAudioElement, context: Audio
   } catch {
     // iOS may reject element-volume writes; the gain fallback still works.
   }
-  try {
-    const url = new URL(audio.currentSrc || audio.src, document.baseURI);
-    if (settable || (url.origin !== location.origin && url.protocol !== "blob:" && url.protocol !== "data:")) {
-      audio.dataset.audioOutput = "true";
-      void context.close();
-      return;
-    }
-    const source = context.createMediaElementSource(audio);
-    const gain = context.createGain();
-    let volume = initialVolume;
-    gain.gain.value = volume;
-    source.connect(gain);
-    gain.connect(context.destination);
-    Object.defineProperty(audio, "volume", {
-      configurable: true,
-      get: () => volume,
-      set: (next: number) => {
-        volume = next;
-        gain.gain.value = next;
-      },
-    });
+  if (settable) {
     audio.dataset.audioOutput = "true";
-    outputs.set(audio, { context, source, gain });
-  } catch {
     void context.close();
+    return;
   }
+  const player = { context };
+  soundtrackPlayers.set(container, player);
+  routeSoundtrack(container, player, audio);
 }
 
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
-  const audio = target.closest<HTMLElement>('[data-testid="video-player"]')?.querySelector<HTMLAudioElement>("audio");
-  const output = audio ? outputs.get(audio) : undefined;
-  if (output) void output.context.resume().catch(() => undefined);
+  const container = target.closest<HTMLElement>('[data-testid="video-player"]');
+  const player = container ? soundtrackPlayers.get(container) : undefined;
+  if (player) void player.context.resume().catch(() => undefined);
 }, true);
 
 new MutationObserver(() => {
-  for (const audio of outputs.keys()) {
-    if (!audio.isConnected) dispose(audio);
+  for (const [container, player] of soundtrackPlayers) {
+    if (!container.isConnected) {
+      detachSoundtrack(player);
+      void player.context.close();
+      soundtrackPlayers.delete(container);
+    } else {
+      const audio = container.querySelector<HTMLAudioElement>("audio");
+      if (audio) routeSoundtrack(container, player, audio);
+      else detachSoundtrack(player);
+    }
   }
   for (const [container, controller] of fullscreenControllers) {
     if (!container.isConnected) {
