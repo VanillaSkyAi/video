@@ -39,23 +39,17 @@
  */
 
 import React, { useEffect, useRef, useState } from "react";
+import {
+  hasSceneMedia,
+  resolveMediaType,
+  type ResolvedMediaType,
+} from "./media-source";
 import type { TemplateStyle } from "../template-context";
 import { BrandGradientOverlay } from "../backgrounds";
 import { getBackgroundTransform } from "../backgrounds";
 
-const VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov", ".m4v", ".avi"];
-
-function isVideoUrl(url: string): boolean {
-  try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    return VIDEO_EXTENSIONS.some((ext) => pathname.endsWith(ext));
-  } catch {
-    const lower = url.toLowerCase();
-    return VIDEO_EXTENSIONS.some((ext) => lower.endsWith(ext));
-  }
-}
-
-export type ResolvedMediaType = "photo" | "video" | "gradient";
+export { hasSceneMedia, resolveMediaType };
+export type { ResolvedMediaType };
 
 export type MediaPosition = "center" | "top" | "bottom" | "left" | "right";
 export type MediaTreatment = "subtle" | "cinematic" | "text-safe";
@@ -177,27 +171,32 @@ export function getMediaTreatmentLayers(
   return layers;
 }
 
-export function resolveMediaType(
-  mediaType: string,
-  mediaUrl: string,
-): ResolvedMediaType {
-  if (mediaType === "gradient") return "gradient";
-  if (mediaType === "video") return "video";
-  if (mediaType === "photo") return "photo";
-  // "auto" — detect from URL extension
-  return mediaUrl && isVideoUrl(mediaUrl) ? "video" : "photo";
-}
-
 /**
- * True when the scene actually renders a photo or video backdrop — i.e. a
- * mediaUrl is set and the template has not been pinned to the brand gradient.
- * Templates use it to switch their type onto the media legibility recipe.
+ * Whether the backdrop is actually painting, which is what decides if a scrim
+ * is earned. "pending" is a browser-only state: static and export renders
+ * never run effects and never wait on a network, so they start (and stay)
+ * ready and their output is unchanged.
  */
-export function hasSceneMedia(variables: Record<string, unknown>): boolean {
-  return (
-    String(variables.mediaUrl || "").trim() !== "" &&
-    String(variables.mediaType || "auto") !== "gradient"
-  );
+type MediaPaintState = "pending" | "ready" | "failed";
+
+function initialMediaPaint(
+  wantsMedia: boolean,
+  resolved: ResolvedMediaType,
+  mediaUrl: string,
+  mediaPoster: string | undefined,
+): MediaPaintState {
+  if (typeof window === "undefined") return "ready";
+  if (!wantsMedia) return "ready";
+  // A poster paints the video's frame immediately, so the scene is already
+  // showing footage even though the stream is still decoding.
+  if (resolved === "video") return mediaPoster ? "ready" : "pending";
+  if (typeof Image === "undefined") return "ready";
+  // Preloaded or browser-cached media decodes synchronously. Reporting it
+  // ready on the first render keeps the common mid-playback case free of a
+  // gradient-then-photo flicker.
+  const cached = new Image();
+  cached.src = mediaUrl;
+  return cached.complete && cached.naturalWidth > 0 ? "ready" : "pending";
 }
 
 export function getMediaBackgroundProps(variables: Record<string, unknown>) {
@@ -262,33 +261,46 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
   const resolved = resolveMediaType(mediaType, mediaUrl);
   const wantsMedia = resolved !== "gradient" && !!mediaUrl;
 
-  // A scrim exists to hold type against footage. When the footage never
-  // arrives — dead URL, blocked host, empty stock search — the scrim is left
-  // darkening the brand gradient it was never meant to touch, and the scene
-  // reads as a muddy, vignetted version of the gradient scenes next to it.
-  // So the media has to prove it painted before anything darkens for it.
+  // A scrim exists to hold type against footage. Until the footage is on
+  // screen there is nothing to hold it against, so the scrim would just be
+  // darkening the brand gradient it was never meant to touch — the scene
+  // reads as a muddy, vignetted version of the gradient scenes beside it.
+  // That window is not rare: it covers the whole load, and it never ends for
+  // a dead URL, a blocked host, or an empty stock search.
   //
-  // Optimistic default: static and export renders never run effects, so they
-  // keep today's output byte for byte. Only a browser that observes a real
-  // failure drops back to the clean gradient.
-  const [mediaFailed, setMediaFailed] = useState(false);
+  // So the media has to paint before anything darkens for it. Both edges of
+  // the swap land on the same commit — scrim and picture appear together,
+  // and the fallback is the clean gradient the docs always promised.
+  const [mediaPaint, setMediaPaint] = useState<MediaPaintState>(() =>
+    initialMediaPaint(wantsMedia, resolved, mediaUrl, mediaPoster),
+  );
+
   useEffect(() => {
-    setMediaFailed(false);
+    setMediaPaint(initialMediaPaint(wantsMedia, resolved, mediaUrl, mediaPoster));
+    // Video reports its own paint through onLoadedData / onError below.
     if (!wantsMedia || resolved !== "photo") return;
     if (typeof Image === "undefined") return;
     let cancelled = false;
     const probe = new Image();
+    probe.onload = () => {
+      if (!cancelled) setMediaPaint("ready");
+    };
     probe.onerror = () => {
-      if (!cancelled) setMediaFailed(true);
+      if (!cancelled) setMediaPaint("failed");
     };
     probe.src = mediaUrl;
+    if (probe.complete) setMediaPaint(probe.naturalWidth > 0 ? "ready" : "failed");
     return () => {
       cancelled = true;
+      probe.onload = null;
       probe.onerror = null;
     };
-  }, [mediaUrl, resolved, wantsMedia]);
+  }, [mediaUrl, mediaPoster, resolved, wantsMedia]);
 
-  const showMedia = wantsMedia && !mediaFailed;
+  // The element stays mounted while pending — that is what loads it. Only a
+  // confirmed failure takes it back out.
+  const showMedia = wantsMedia && mediaPaint !== "failed";
+  const showTreatment = wantsMedia && mediaPaint === "ready";
   const resolvedPosition = resolveMediaPosition(mediaPosition);
   const resolvedTreatment = resolveMediaTreatment(mediaTreatment);
   const treatmentLayers = getMediaTreatmentLayers(resolvedTreatment, textAnchor);
@@ -386,7 +398,8 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
             // decode the first frame; "auto" kicks that work off the instant
             // the element mounts.
             preload="auto"
-            onError={() => setMediaFailed(true)}
+            onLoadedData={() => setMediaPaint("ready")}
+            onError={() => setMediaPaint("failed")}
             data-media-position={mediaPosition}
             style={{
               position: "absolute",
@@ -414,7 +427,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
           />
         ))}
 
-      {showMedia &&
+      {showTreatment &&
         treatmentLayers.map((layer) => (
           <div
             key={layer.id}

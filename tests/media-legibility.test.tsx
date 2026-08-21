@@ -94,6 +94,49 @@ describe("media scrims", () => {
   });
 });
 
+interface StubProbe {
+  succeed: () => void;
+  fail: () => void;
+}
+
+/** Stand in for the photo probe: jsdom does not fetch, so tests drive it. */
+function stubImageProbe(): StubProbe[] {
+  const probes: StubProbe[] = [];
+  class ProbeImage {
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    complete = false;
+    naturalWidth = 0;
+    set src(_value: string) {
+      probes.push({
+        succeed: () => this.onload?.(),
+        fail: () => this.onerror?.(),
+      });
+    }
+  }
+  globalThis.Image = ProbeImage as unknown as typeof Image;
+  return probes;
+}
+
+function mountBgMedia(
+  root: { render: (node: ReturnType<typeof createElement>) => void },
+  variables: Record<string, unknown>,
+): void {
+  root.render(
+    createElement(BgMediaTemplate, {
+      variables,
+      style,
+      progress: 0.5,
+      beatIntensity: 0,
+      width: 1080,
+      height: 1920,
+      safeZone: { top: 100, right: 60, bottom: 100, left: 60 },
+      sceneDuration: 4,
+      isPlaying: false,
+    }),
+  );
+}
+
 describe("media that never paints", () => {
   // React requires this flag before act(...) drives a concurrent root.
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -104,15 +147,8 @@ describe("media that never paints", () => {
     const root = createRoot(container);
 
     // jsdom does not fetch, so drive the probe's failure path directly.
-    const loaded: Array<{ fail: () => void }> = [];
+    const probes = stubImageProbe();
     const RealImage = globalThis.Image;
-    class ProbeImage {
-      onerror: (() => void) | null = null;
-      set src(_value: string) {
-        loaded.push({ fail: () => this.onerror?.() });
-      }
-    }
-    globalThis.Image = ProbeImage as unknown as typeof Image;
 
     try {
       await act(async () => {
@@ -131,16 +167,54 @@ describe("media that never paints", () => {
         );
       });
 
-      expect(container.querySelectorAll("[data-media-overlay]").length).toBeGreaterThan(0);
-
       await act(async () => {
-        loaded.forEach((probe) => probe.fail());
+        probes.forEach((probe) => probe.fail());
       });
 
       // No scrim, no media layer — just the brand gradient the scene falls
       // back to, identical to every other gradient-backed template.
       expect(container.querySelectorAll("[data-media-overlay]").length).toBe(0);
       expect(container.querySelectorAll("[data-media-position]").length).toBe(0);
+    } finally {
+      await act(async () => root.unmount());
+      globalThis.Image = RealImage;
+      container.remove();
+    }
+  });
+});
+
+describe("media still loading", () => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+  it("holds the scrim back until the photo lands, then shows both together", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const probes = stubImageProbe();
+    const RealImage = globalThis.Image;
+
+    try {
+      await act(async () => {
+        mountBgMedia(root, {
+          texts: "Autumn",
+          mediaUrl: "https://cdn.test/slow.jpg",
+        });
+      });
+
+      // Still loading: the brand gradient is on its own, exactly as it looks
+      // in a scene that never asked for media at all.
+      expect(container.querySelectorAll("[data-media-overlay]").length).toBe(0);
+
+      await act(async () => {
+        probes.forEach((probe) => probe.succeed());
+      });
+
+      // The picture arrives and the scrim arrives with it — one commit, so
+      // there is no frame showing either one without the other.
+      expect(
+        container.querySelectorAll("[data-media-overlay]").length,
+      ).toBeGreaterThan(0);
+      expect(container.querySelectorAll("[data-media-position]").length).toBe(1);
     } finally {
       await act(async () => root.unmount());
       globalThis.Image = RealImage;

@@ -20,6 +20,7 @@ import { getVideoDuration, resolveVideoTimeline } from "../protocol/timeline.js"
 import { parseVideo } from "../protocol/persistence.js";
 import { overlayTemplateRegistry, type TemplateRegistry } from "../visual-system/catalog/kit.js";
 import { BUILTIN_TEMPLATE_KIT, preloadBuiltinTemplate } from "../visual-system/catalog/builtin.js";
+import { preloadSceneMedia } from "./preload-media.js";
 
 export type VideoPlaybackMode =
   | "manual"
@@ -237,7 +238,10 @@ export function VideoPlayerRuntime({
     setCurrentTime(0);
 
     if (video) {
-      for (const scene of video.scenes) preloadBuiltinTemplate(scene.templateId);
+      for (const scene of video.scenes) {
+        preloadBuiltinTemplate(scene.templateId);
+        preloadSceneMedia(scene.variables);
+      }
       return;
     }
     if (!stream) return;
