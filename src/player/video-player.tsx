@@ -664,6 +664,7 @@ export function VideoPlayerRuntime({
         <audio
           ref={audioRef}
           src={config.audio.audioUrl}
+          data-volume={config.audio.volume ?? 1}
           autoPlay={isPlaying}
           muted={isMuted}
           preload="auto"

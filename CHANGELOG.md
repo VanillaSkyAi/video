@@ -8,6 +8,9 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
   focuses, or taps the player, and keeps paused and completed controls visible.
 - Makes fullscreen usable on mobile browsers through prefixed fullscreen APIs
   and a viewport-filling fallback when native fullscreen is unavailable.
+- Restores configured soundtrack volume and end-of-video fades on iPhone Safari
+  by using a Web Audio gain stage for same-origin audio when element volume is
+  device-controlled, while preserving direct playback for cross-origin tracks.
 
 - Rebuilds text legibility over photo and video backdrops. Scrims now ramp off
   an eased curve instead of a two-stop linear fade, so they no longer leave a

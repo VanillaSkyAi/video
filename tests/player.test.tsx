@@ -834,6 +834,125 @@ describe("VideoPlayer", () => {
     releasePlanner();
   });
 
+  it("fades soundtrack audio through Web Audio when iPhone Safari locks element volume", async () => {
+    let nextFrame: FrameRequestCallback | undefined;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      nextFrame = callback;
+      return 1;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "volume", "get").mockReturnValue(1);
+    vi.spyOn(HTMLMediaElement.prototype, "volume", "set").mockImplementation(() => undefined);
+
+    const gain = { value: 1 };
+    const sourceConnect = vi.fn();
+    const gainConnect = vi.fn();
+    const disconnect = vi.fn();
+    const resume = vi.fn().mockResolvedValue(undefined);
+    const close = vi.fn().mockResolvedValue(undefined);
+    const createMediaElementSource = vi.fn(() => ({ connect: sourceConnect, disconnect }));
+    const createGain = vi.fn(() => ({ gain, connect: gainConnect, disconnect }));
+    class FakeAudioContext {
+      readonly destination = {};
+      readonly state = "suspended";
+      readonly createMediaElementSource = createMediaElementSource;
+      readonly createGain = createGain;
+      readonly resume = resume;
+      readonly close = close;
+    }
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+
+    const { VideoPlayer } = await import("../src/player/video-player");
+    const video: Video = {
+      schemaVersion: "0.1",
+      orientation: "portrait",
+      audio: {
+        trackId: "soundtrack",
+        audioUrl: "data:audio/wav;base64,UklGRg==",
+        duration: 4,
+        volume: 1,
+        fadeOutMs: 2_000,
+        beatDetection: { sensitivity: 0.5 },
+        beatMarkers: [],
+      },
+      scenes: [{
+        id: "saved",
+        templateId: "bigNumber",
+        variables: { value: "1", label: "update" },
+        timing: { fixedDuration: 4 },
+      }],
+      style: TEST_VIDEO_STYLE,
+    };
+    const view = render(createElement(VideoPlayer, {
+      video,
+      autoPlay: false,
+      startMuted: false,
+    }));
+
+    await waitFor(() => expect(document.getElementById("vanillasky-player-control-visibility")).not.toBeNull());
+    fireEvent.click(view.getByRole("button", { name: "Play video with sound" }));
+    await waitFor(() => expect(resume).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(createMediaElementSource).toHaveBeenCalledWith(view.container.querySelector("audio")));
+    expect(sourceConnect).toHaveBeenCalledTimes(1);
+    expect(gainConnect).toHaveBeenCalledTimes(1);
+
+    act(() => nextFrame?.(performance.now() + 3_000));
+    expect(gain.value).toBeCloseTo(0.5, 1);
+
+    act(() => nextFrame?.(performance.now() + 4_000));
+    expect(gain.value).toBe(0);
+    expect(pause).toHaveBeenCalled();
+  });
+
+  it("keeps cross-origin soundtracks on the media element when volume control is unavailable", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "volume", "get").mockReturnValue(1);
+    vi.spyOn(HTMLMediaElement.prototype, "volume", "set").mockImplementation(() => undefined);
+    const createMediaElementSource = vi.fn();
+    class FakeAudioContext {
+      readonly resume = vi.fn().mockResolvedValue(undefined);
+      readonly close = vi.fn().mockResolvedValue(undefined);
+      readonly createMediaElementSource = createMediaElementSource;
+    }
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+
+    const { VideoPlayer } = await import("../src/player/video-player");
+    const video: Video = {
+      schemaVersion: "0.1",
+      orientation: "portrait",
+      audio: {
+        trackId: "soundtrack",
+        audioUrl: "https://media.example.test/soundtrack.mp3",
+        duration: 4,
+        volume: 0.6,
+        fadeOutMs: 2_000,
+        beatDetection: { sensitivity: 0.5 },
+        beatMarkers: [],
+      },
+      scenes: [{
+        id: "saved",
+        templateId: "bigNumber",
+        variables: { value: "1", label: "update" },
+        timing: { fixedDuration: 4 },
+      }],
+      style: TEST_VIDEO_STYLE,
+    };
+    const view = render(createElement(VideoPlayer, {
+      video,
+      autoPlay: false,
+      startMuted: false,
+    }));
+
+    await waitFor(() => expect(document.getElementById("vanillasky-player-control-visibility")).not.toBeNull());
+    fireEvent.click(view.getByRole("button", { name: "Play video with sound" }));
+    await waitFor(() => expect(play).toHaveBeenCalled());
+    expect(createMediaElementSource).not.toHaveBeenCalled();
+    expect(view.getByTestId("video-player").getAttribute("data-playing")).toBe("true");
+  });
+
   it("pauses the player when the browser blocks audible autoplay", async () => {
     vi.spyOn(HTMLMediaElement.prototype, "play").mockRejectedValue(new DOMException("Autoplay blocked", "NotAllowedError"));
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
