@@ -40,13 +40,17 @@ const DEFAULT_OPENING_TEXT = "Creating your video...";
 function resolveVideoInput(input: VideoInput): VideoInput {
   return {
     ...input,
-    opening: input.opening?.trim() || DEFAULT_OPENING_TEXT,
+    opening: input.opening === false
+      ? false
+      : input.opening?.trim() || DEFAULT_OPENING_TEXT,
   };
 }
 
 function resolveStreamCapabilities(
   capabilities: CreateVideoOptions["capabilities"],
+  hasRuntimeOpening: boolean,
 ): CreateVideoOptions["capabilities"] {
+  if (!hasRuntimeOpening) return capabilities;
   if (capabilities?.templates == null) return capabilities;
   return {
     ...capabilities,
@@ -90,7 +94,7 @@ function buildInitialConfig(
   closerReserveSec: number,
   getTemplatePacing: CreateVideoOptions["getTemplatePacing"],
 ): { config: Video; warnings: VideoWarning[] } {
-  const openingText = input.opening?.trim();
+  const openingText = typeof input.opening === "string" ? input.opening.trim() : undefined;
   const rawScenes: VideoScene[] = openingText
     ? [{
         id: "supplied-opening",
@@ -161,7 +165,7 @@ function validateInput(input: VideoInput): void {
     (!Number.isFinite(input.maxDurationSec) || input.maxDurationSec < 5 || input.maxDurationSec > 120)) {
     throw new Error("Video response maximum duration must be between 5 and 120 seconds");
   }
-  if (input.opening != null && !input.opening.trim()) {
+  if (input.opening !== false && input.opening != null && !input.opening.trim()) {
     throw new Error("Video response opening must be a non-empty string");
   }
   if (input.audio && !input.audio.src.trim()) {
@@ -273,7 +277,7 @@ export function createVideo(
   options: CreateVideoOptions,
 ): VideoRun {
   validateInput(rawInput);
-  const usesDefaultOpening = rawInput.opening == null;
+  const requiresGeneratedScene = rawInput.opening == null || rawInput.opening === false;
   const input = resolveVideoInput(rawInput);
   const requestId = options.requestId ?? createId("request");
   const runId = options.runId ?? createId("run");
@@ -395,7 +399,7 @@ export function createVideo(
         format: { orientation: initialConfig.orientation ?? "portrait" },
         style: initialConfig.style,
         meta: initialConfig.meta,
-        capabilities: resolveStreamCapabilities(options.capabilities),
+        capabilities: resolveStreamCapabilities(options.capabilities, initialConfig.scenes.length > 0),
       }));
       if (initialConfig.audio) yield emit(events.create("audio.set", { audio: initialConfig.audio }));
       for (const warning of initial.warnings) {
@@ -769,7 +773,7 @@ export function createVideo(
           warning: createIncompletePlanWarning(),
         }));
       }
-      if (generatedSceneCount === 0 && usesDefaultOpening) {
+      if (generatedSceneCount === 0 && requiresGeneratedScene) {
         throw new Error("The planner completed without adding a scene");
       }
       // The documented persistence boundary must accept every completed value.

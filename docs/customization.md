@@ -80,12 +80,15 @@ The opening is deterministic and should not wait for an LLM or remote media.
 Omit it to use `Creating your video...`, or supply one concise custom sentence:
 
 ```ts
-opening: "Joris, your Q2 recap is ready."
+opening: "Your Q2 customer impact recap is ready."
 ```
 
+Pass `opening: false` to omit the persisted opening and show application-owned
+loading UI until the first generated scene arrives.
+
 Use `opening` only for a genuine opening that should remain in the completed
-response. VanillaSky infers the scene ID, `notification` template, variables,
-and five-second timing. You do not need to create a generic loading scene.
+response. VanillaSky infers the scene ID, `media` template, gradient variables,
+and three-second timing. Keep generic loading state in the host UI instead.
 
 ## Aspect ratio and responsive layout
 

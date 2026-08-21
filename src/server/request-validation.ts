@@ -140,7 +140,7 @@ export function parseVideoRequest(value: unknown): VideoRequest {
       "request.input.orientation",
     );
   }
-  if (input.opening != null) string(input.opening, "request.input.opening");
+  if (input.opening != null && input.opening !== false) string(input.opening, "request.input.opening");
   if (input.audio != null && input.audio !== false) {
     const soundtrack = record(input.audio, "request.input.audio");
     allowedKeys(soundtrack, ["src"], "request.input.audio");

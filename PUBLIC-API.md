@@ -183,6 +183,10 @@ mounted player autoplay with sound after the first successful viewer start.
 `manual`, `muted-autoplay`, and `autoplay-with-sound` cover the other browser
 startup policies.
 
+`VideoInput.opening` accepts custom copy, uses the deterministic fallback when
+omitted, and accepts `false` when the application owns transient loading UI and
+wants the completed video to begin with the first generated scene.
+
 Saved-video playback performs no generation request. `VideoPlayerBinding` and
 the internal reducer state are not public types.
 

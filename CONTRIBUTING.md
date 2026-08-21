@@ -39,7 +39,7 @@ promote that section into a version heading; see
 [Releasing](docs/maintainers/releasing.md).
 
 A breaking change, including a pre-1.0 minor, requires explicit approval from
-Joris before implementation or merge. Breaking-change notes and migration
+the repository owner before implementation or merge. Breaking-change notes and migration
 evidence are required context, but migration evidence does not count as
 approval.
 

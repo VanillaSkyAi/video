@@ -86,6 +86,43 @@ function savedVideoState(video: Video): VideoState {
   };
 }
 
+type PlayerIconName = "enter-fullscreen" | "exit-fullscreen" | "pause" | "play" | "replay" | "volume" | "volume-off";
+
+function PlayerIcon({ name, size = 22 }: { name: PlayerIconName; size?: number }): ReactElement {
+  const shared = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+    focusable: false,
+  };
+
+  if (name === "play") {
+    return <svg {...shared}><path d="M8 5v14l11-7z" fill="currentColor" stroke="none" /></svg>;
+  }
+  if (name === "pause") {
+    return <svg {...shared}><rect x="7" y="5" width="3.5" height="14" rx="1" fill="currentColor" stroke="none" /><rect x="13.5" y="5" width="3.5" height="14" rx="1" fill="currentColor" stroke="none" /></svg>;
+  }
+  if (name === "replay") {
+    return <svg {...shared}><path d="M4.5 9A8 8 0 1 1 5 16" /><path d="M4.5 4.5V9H9" /></svg>;
+  }
+  if (name === "volume-off") {
+    return <svg {...shared}><path d="M11 5 6.5 9H3v6h3.5L11 19z" /><path d="m16 9 5 5M21 9l-5 5" /></svg>;
+  }
+  if (name === "volume") {
+    return <svg {...shared}><path d="M11 5 6.5 9H3v6h3.5L11 19z" /><path d="M15 9.5a4 4 0 0 1 0 5M17.8 7a7.5 7.5 0 0 1 0 10" /></svg>;
+  }
+  if (name === "exit-fullscreen") {
+    return <svg {...shared}><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></svg>;
+  }
+  return <svg {...shared}><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" /></svg>;
+}
+
 export function VideoPlayerRuntime({
   kit,
   stream,
@@ -458,33 +495,38 @@ export function VideoPlayerRuntime({
     if (document.fullscreenElement === container) await document.exitFullscreen?.();
     else await container.requestFullscreen?.();
   };
+  const controlSize = Math.max(40, Math.min(52, Math.round(displayWidth * 0.15)));
+  const controlInset = Math.max(10, Math.min(20, Math.round(displayWidth * 0.056)));
   const controlButtonStyle: CSSProperties = {
     display: "inline-grid",
     placeItems: "center",
     flex: "0 0 auto",
-    minWidth: 44,
-    minHeight: 44,
-    padding: "6px 9px",
-    border: 0,
-    borderRadius: 8,
-    backgroundColor: "rgba(9, 7, 18, 0.88)",
+    width: controlSize,
+    height: controlSize,
+    minWidth: controlSize,
+    minHeight: controlSize,
+    padding: 0,
+    border: "1px solid rgba(255, 255, 255, 0.08)",
+    borderRadius: 999,
+    backgroundColor: "rgba(255, 255, 255, 0.16)",
     color: "#ffffff",
-    font: "600 13px/1 system-ui, sans-serif",
+    boxShadow: "0 5px 18px rgba(0, 0, 0, 0.16)",
+    backdropFilter: "blur(12px)",
     cursor: "pointer",
   };
   const startButtonStyle: CSSProperties = {
     display: "inline-flex",
     alignItems: "center",
     gap: 10,
-    minHeight: 54,
-    padding: "12px 18px",
-    border: "1px solid rgba(255, 255, 255, 0.3)",
+    minHeight: 60,
+    padding: "14px 22px",
+    border: "1px solid rgba(9, 7, 18, 0.08)",
     borderRadius: 999,
-    backgroundColor: "rgba(9, 7, 18, 0.88)",
-    color: "#ffffff",
-    boxShadow: "0 8px 28px rgba(0, 0, 0, 0.4)",
-    backdropFilter: "blur(12px)",
-    font: "700 15px/1 system-ui, sans-serif",
+    backgroundColor: "#ffffff",
+    color: "#090712",
+    boxShadow: "0 8px 28px rgba(0, 0, 0, 0.24)",
+    font: "700 16px/1 system-ui, sans-serif",
+    whiteSpace: "nowrap",
     cursor: "pointer",
   };
   const startButtonPositionStyle: CSSProperties = {
@@ -572,7 +614,7 @@ export function VideoPlayerRuntime({
               onClick={armPlayback}
               style={{ ...startButtonStyle, ...startButtonPositionStyle }}
             >
-              <span aria-hidden="true">▶</span>
+              <PlayerIcon name="play" size={20} />
               {config?.audio && !isMuted ? "Play with sound" : "Play video"}
             </button>
           ) : null}
@@ -604,7 +646,7 @@ export function VideoPlayerRuntime({
             ...startButtonPositionStyle,
           }}
         >
-          <span aria-hidden="true">▶</span>
+          <PlayerIcon name="play" size={20} />
           {config?.audio && !isMuted ? "Play with sound" : "Play video"}
         </button>
       ) : null}
@@ -618,56 +660,82 @@ export function VideoPlayerRuntime({
           loop={state.status === "streaming" || introPlaying}
         />
       ) : null}
-      {!generationCoverVisible ? <div
-        data-testid="video-controls"
+      {ended ? <div
+        data-testid="video-ended-scrim"
+        aria-hidden="true"
         style={{
           position: "absolute",
-          right: 10,
-          bottom: 10,
-          zIndex: 2,
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          minHeight: 48,
-          padding: "6px 8px",
-          border: "1px solid rgba(255, 255, 255, 0.2)",
-          borderRadius: 12,
-          backgroundColor: "rgba(9, 7, 18, 0.82)",
-          backdropFilter: "blur(12px)",
-          color: "#ffffff",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.35)",
+          inset: 0,
+          zIndex: 1,
+          pointerEvents: "none",
+          background: "rgba(4, 3, 18, 0.52)",
+          backdropFilter: "blur(4px)",
+        }}
+      /> : null}
+      {ended ? <button
+        type="button"
+        data-testid="video-replay-button"
+        aria-label="Replay video response"
+        onClick={togglePlayback}
+        style={{
+          ...startButtonStyle,
+          ...startButtonPositionStyle,
+          zIndex: 3,
         }}
       >
-        {!showStartPoster ? <button
-          type="button"
-          aria-label={ended ? "Replay video response" : isPlaying ? "Pause video response" : "Play video response"}
-          onClick={togglePlayback}
-          style={controlButtonStyle}
+        <PlayerIcon name="replay" size={21} />
+        Replay
+      </button> : null}
+      {!generationCoverVisible && !showStartPoster && config?.scenes.length ? <div
+        data-testid="video-controls"
+        data-layout="split"
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 4,
+          pointerEvents: "none",
+        }}
+      >
+        <div
+          data-testid="video-primary-controls"
+          style={{ position: "absolute", left: controlInset, bottom: controlInset, display: "flex", pointerEvents: "auto" }}
         >
-          {ended ? "↻ Replay" : isPlaying ? "Ⅱ" : "▶"}
-        </button> : null}
-        {config?.audio ? (
           <button
             type="button"
-            aria-label={isMuted ? "Unmute video response" : "Mute video response"}
-            aria-pressed={!isMuted}
-            onClick={() => setIsMuted((muted) => {
-              if (muted) setAudioUnlocked(true);
-              return !muted;
-            })}
+            aria-label={ended ? "Play video response from beginning" : isPlaying ? "Pause video response" : "Play video response"}
+            onClick={togglePlayback}
             style={controlButtonStyle}
           >
-            {isMuted ? "🔇" : "🔊"}
+            <PlayerIcon name={isPlaying ? "pause" : "play"} />
           </button>
-        ) : null}
-        <button
-          type="button"
-          aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-          onClick={() => void toggleFullscreen()}
-          style={controlButtonStyle}
+        </div>
+        <div
+          data-testid="video-secondary-controls"
+          style={{ position: "absolute", right: controlInset, bottom: controlInset, display: "flex", gap: 10, pointerEvents: "auto" }}
         >
-          {isFullscreen ? "↙" : "⛶"}
-        </button>
+          {config?.audio ? (
+            <button
+              type="button"
+              aria-label={isMuted ? "Unmute video response" : "Mute video response"}
+              aria-pressed={!isMuted}
+              onClick={() => setIsMuted((muted) => {
+                if (muted) setAudioUnlocked(true);
+                return !muted;
+              })}
+              style={controlButtonStyle}
+            >
+              <PlayerIcon name={isMuted ? "volume-off" : "volume"} />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+            onClick={() => void toggleFullscreen()}
+            style={controlButtonStyle}
+          >
+            <PlayerIcon name={isFullscreen ? "exit-fullscreen" : "enter-fullscreen"} />
+          </button>
+        </div>
       </div> : null}
     </div>
   );

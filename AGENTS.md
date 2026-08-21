@@ -97,9 +97,12 @@ on the merged commit. The tag publisher accepts only the exact current
 `origin/main` commit and publishes through OIDC.
 
 A breaking change, including a pre-1.0 minor, requires explicit approval from
-Joris before implementation or merge. Breaking-change notes and migration
+the repository owner before implementation or merge. Breaking-change notes and migration
 evidence are required context, but migration evidence does not count as
 approval.
+
+Public examples and fixtures must use fictional people or role-based audience
+copy; never use the repository owner's identity.
 
 Never publish, tag, create a release, move dist-tags, modify production secrets,
 or deploy as an implicit side effect of a local verification task.

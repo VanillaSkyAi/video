@@ -204,7 +204,7 @@ const fetcher: typeof fetch = async (_url, init) => {
 };
 
 export default function App() {
-  const [input, setInput] = useState("Joris completed 142 customer conversations.");
+  const [input, setInput] = useState("Acme completed 142 customer conversations.");
   const video = useVideo({ endpoint: "/api/video", fetcher });
   const generate = (source: string) => video.generate({ input: source });
   useEffect(() => {
@@ -260,7 +260,7 @@ export default function App() {
     }
   };
   await page.goto("http://127.0.0.1:4175/");
-  await waitForStatus("Complete:1:Joris");
+  await waitForStatus("Complete:1:Acme");
   try {
     await page.locator('[data-template-id="bigNumber"]').waitFor({ timeout: 10_000 });
   } catch (error) {
@@ -268,11 +268,11 @@ export default function App() {
     const playerCount = await player.count();
     throw new Error(`Built-in frame did not render; player count=${playerCount}, status=${playerCount ? await player.getAttribute("data-status") : "missing"}, scenes=${playerCount ? await player.getAttribute("data-scenes") : "missing"}, browser errors=${browserErrors.join(" | ") || "none"}, body=${await page.locator("body").innerText()}`, { cause: error });
   }
-  await page.getByText("Joris's quarter").waitFor({ timeout: 10_000 });
-  await page.getByLabel("Input").fill("Ada completed 142 customer conversations.");
+  await page.getByText("Acme's quarter").waitFor({ timeout: 10_000 });
+  await page.getByLabel("Input").fill("Northstar completed 142 customer conversations.");
   await page.getByRole("button", { name: "Generate" }).click();
-  await waitForStatus("Complete:1:Ada");
-  await page.getByText("Ada's quarter").waitFor({ timeout: 10_000 });
+  await waitForStatus("Complete:1:Northstar");
+  await page.getByText("Northstar's quarter").waitFor({ timeout: 10_000 });
   if (browserErrors.length) throw new Error(`Clean-room browser errors: ${browserErrors.join(" | ")}`);
   runCli(["create", "ownershipProof"]);
   const ownedTemplatePath = join(app, "vanillasky", "templates", "bigNumber.tsx");

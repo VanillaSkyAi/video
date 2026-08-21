@@ -61,7 +61,9 @@ export async function runAcceptanceFixture({
     selectAudio,
     capabilities: {
       templates: [...new Set([
-        ...(fixture.input.opening?.trim() ? ["media"] : []),
+        ...(typeof fixture.input.opening === "string" && fixture.input.opening.trim()
+          ? ["media"]
+          : []),
         ...requestedTemplates,
       ])],
     },

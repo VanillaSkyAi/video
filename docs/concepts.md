@@ -25,7 +25,8 @@ or export pipeline when an encoded file is required.
   knowledge may supplement the request;
 - `instructions`: optional creative direction that cannot override facts;
 - `opening`: optional custom copy for the deterministic opening; omission uses
-  `Creating your video...`;
+  `Creating your video...`, while `false` lets the host render loading UI
+  without adding an opening scene to the video;
 - `personalization`: application-defined fields such as name, role, account,
   period, goal, or onboarding partner;
 - `brand`: an optional background preset plus name, logo, font, surfaces, and

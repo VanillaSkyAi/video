@@ -42,7 +42,7 @@ describe("standalone package boundary", () => {
       ["supa", "base"].join(""),
       ["VITE", "_"].join(""),
       ["@", "/"].join(""),
-      ["/Users", "/jorisdieben"].join(""),
+      ["/Users", "/example-builder"].join(""),
     ];
     const hits = sourceFiles(join(process.cwd(), "src")).flatMap((path) => {
       const source = readFileSync(path, "utf8");

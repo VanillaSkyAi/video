@@ -4,6 +4,14 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
+- Redesigns player controls for each playback state with responsive circular
+  icon controls, a sound-first start action, and a dimmed replay treatment that
+  leaves the completed poster frame visible.
+- Lets applications pass `opening: false` to omit the deterministic opening
+  scene and render their own transient loading UI while the first generated
+  scene is planned. This keeps loading state out of completed video JSON and
+  does not force `media` into the planner's template capabilities.
+
 ## 0.3.0
 
 - Documents closer eligibility: a template may close a video only when its
