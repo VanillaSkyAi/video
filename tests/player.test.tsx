@@ -603,12 +603,66 @@ describe("VideoPlayer", () => {
       expect(player.getAttribute("data-current-time")).toBe("4.000");
     });
 
+    expect(view.getByTestId("video-ended-scrim")).toBeDefined();
     const replay = view.getByRole("button", { name: "Replay video response" });
+    expect(replay.getAttribute("data-testid")).toBe("video-replay-button");
+    expect(replay.querySelector("svg")).not.toBeNull();
     expect(replay.textContent).toContain("Replay");
+    expect(view.getByRole("button", { name: "Play video response from beginning" }).querySelector("svg")).not.toBeNull();
     fireEvent.click(replay);
     expect(player.getAttribute("data-playing")).toBe("true");
     expect(player.getAttribute("data-ended")).toBe("false");
     expect(player.getAttribute("data-current-time")).toBe("0.000");
+  });
+
+  it("presents idle, playing, and paused controls as distinct player states", async () => {
+    let nextFrame: FrameRequestCallback | undefined;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      nextFrame = callback;
+      return 1;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    const { VideoPlayer } = await import("../src/player/video-player");
+    const response = createVideo({
+      input: "What makes product onboarding feel effortless?",
+      opening: "Three ways to make product onboarding feel effortless.",
+      audio: { src: "data:audio/wav;base64,UklGRg==" },
+    }, {
+      generate: async function* () { yield { type: "plan.complete" as const }; },
+    });
+    const view = render(createElement(VideoPlayer, {
+      templates: createRenderTemplateRegistry({ templates: [] }),
+      stream: response.stream,
+      width: 360,
+      playbackMode: "manual",
+    }));
+
+    await waitFor(() => expect(view.getByTestId("video-player").getAttribute("data-status")).toBe("complete"));
+    const start = view.getByRole("button", { name: "Play video with sound" });
+    expect(start.querySelector("svg")).not.toBeNull();
+    expect(start.style.backgroundColor).toBe("rgb(255, 255, 255)");
+    expect(start.style.color).toBe("rgb(9, 7, 18)");
+    expect(start.style.whiteSpace).toBe("nowrap");
+    expect(view.queryByTestId("video-controls")).toBeNull();
+
+    fireEvent.click(start);
+    const controls = view.getByTestId("video-controls");
+    expect(controls.getAttribute("data-layout")).toBe("split");
+    const pause = view.getByRole("button", { name: "Pause video response" });
+    expect(pause.querySelector("svg")).not.toBeNull();
+    expect(pause.style.width).toBe("52px");
+    expect(pause.style.height).toBe("52px");
+    expect(pause.style.borderRadius).toBe("999px");
+    expect(view.getByTestId("video-primary-controls").contains(pause)).toBe(true);
+    expect(view.getByTestId("video-secondary-controls").contains(view.getByRole("button", { name: "Mute video response" }))).toBe(true);
+
+    await waitFor(() => expect(nextFrame).toBeDefined());
+    act(() => nextFrame?.(performance.now() + 1_000));
+    await waitFor(() => expect(view.getByTestId("video-player").getAttribute("data-current-time")).not.toBe("0.000"));
+    fireEvent.click(pause);
+    expect(view.getByRole("button", { name: "Play video response" }).querySelector("svg")).not.toBeNull();
   });
   it("provides named keyboard playback controls and respects reduced motion", async () => {
     Object.defineProperty(window, "matchMedia", {
@@ -651,10 +705,10 @@ describe("VideoPlayer", () => {
     fireEvent.keyDown(player, { key: " " });
     expect(player.getAttribute("data-playing")).toBe("true");
     const control = view.getByRole("button", { name: "Pause video response" });
-    expect(control.style.backgroundColor).toBe("rgba(9, 7, 18, 0.88)");
+    expect(control.style.backgroundColor).toBe("rgba(255, 255, 255, 0.16)");
     expect(control.style.color).toBe("rgb(255, 255, 255)");
-    expect(control.style.minWidth).toBe("44px");
-    expect(control.style.minHeight).toBe("44px");
+    expect(control.style.minWidth).toBe("52px");
+    expect(control.style.minHeight).toBe("52px");
     fireEvent.keyDown(control, { key: " " });
     expect(player.getAttribute("data-playing")).toBe("true");
     fireEvent.click(control);
@@ -816,6 +870,7 @@ describe("VideoPlayer", () => {
     expect(view.queryByRole("slider", { name: "Video response progress" })).toBeNull();
     const audio = view.container.querySelector("audio")!;
     expect(audio.muted).toBe(true);
+    fireEvent.click(view.getByRole("button", { name: "Play video response" }));
     fireEvent.click(view.getByRole("button", { name: "Unmute video response" }));
     expect(audio.muted).toBe(false);
     expect(view.getByRole("button", { name: "Mute video response" })).toBeDefined();

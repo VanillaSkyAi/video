@@ -86,6 +86,45 @@ test("keeps frame and player templates on the same canonical canvas at thumbnail
   }
 });
 
+test("presents idle, playing, paused, and ended player states with the production controls", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Focused player-state presentation runs once in Chromium.");
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.play = async () => undefined;
+    HTMLMediaElement.prototype.pause = () => undefined;
+  });
+  await page.goto("http://127.0.0.1:4274/tests/browser/fixtures/player-states.html");
+
+  const idle = page.locator('[data-player-state="idle"]');
+  await expect(idle.getByRole("button", { name: "Play video with sound" })).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(idle.locator('[data-testid="video-controls"]')).toHaveCount(0);
+
+  const playing = page.locator('[data-player-state="playing"]');
+  await playing.getByRole("button", { name: "Play video with sound" }).click();
+  await expect(playing.getByRole("button", { name: "Pause video response" })).toBeVisible();
+  await expect(playing.locator('[data-testid="video-controls"]')).toHaveAttribute("data-layout", "split");
+
+  const paused = page.locator('[data-player-state="paused"]');
+  await paused.getByRole("button", { name: "Play video with sound" }).click();
+  await page.waitForTimeout(800);
+  await paused.getByRole("button", { name: "Pause video response" }).click();
+  await expect(paused.getByRole("button", { name: "Play video response" })).toBeVisible();
+
+  const ended = page.locator('[data-player-state="ended"]');
+  await ended.getByRole("button", { name: "Play video with sound" }).click();
+  await expect(ended.locator('[data-ended="true"]')).toBeVisible({ timeout: 3_000 });
+  await expect(ended.locator('[data-testid="video-ended-scrim"]')).toHaveCSS("backdrop-filter", "blur(4px)");
+  await expect(ended.getByRole("button", { name: "Replay video response" })).toBeVisible();
+  await expect(ended.getByRole("button", { name: "Play video response from beginning" })).toBeVisible();
+
+  for (const state of [playing, paused, ended]) {
+    const primary = state.locator('[data-testid="video-primary-controls"] button');
+    const secondary = state.locator('[data-testid="video-secondary-controls"] button');
+    await expect(primary).toHaveCSS("border-radius", "999px");
+    await expect(primary.locator("svg")).toHaveCount(1);
+    await expect(secondary.first().locator("svg")).toHaveCount(1);
+  }
+});
+
 test("loads the minimal public example and surfaces route failures", async ({ page }) => {
   await page.goto("/");
 
