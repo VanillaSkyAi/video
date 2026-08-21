@@ -9,7 +9,7 @@ import {
 } from "../protocol/state.js";
 import { overlayTemplateRegistry, type TemplateRegistry } from "../visual-system/catalog/kit.js";
 import { BUILTIN_TEMPLATE_KIT, preloadBuiltinTemplate } from "../visual-system/catalog/builtin.js";
-import { preloadSceneMedia } from "./preload-media.js";
+import { warmSceneMedia } from "./warm-scene-media.js";
 import type { VideoPlayerProps } from "./video-player.js";
 import { VideoError } from "./video-error.js";
 import type { VideoWarning } from "../protocol/warnings.js";
@@ -113,11 +113,14 @@ export function useVideo(options: UseVideoOptions = {}): UseVideoResult {
         // lead time there is before the scene plays. A resolved stock lookup
         // arrives as asset.patch well after scene.add, so watching only the
         // add would miss the case this exists for.
-        if (_event.type === "scene.add") preloadSceneMedia(_event.data.scene.variables);
-        if (_event.type === "asset.patch") preloadSceneMedia(_event.data.variables);
-        if (_event.type === "scene.patch" && _event.data.patch.variables) {
-          preloadSceneMedia(_event.data.patch.variables);
-        }
+        const backdrop = _event.type === "scene.add"
+          ? _event.data.scene.variables
+          : _event.type === "asset.patch"
+            ? _event.data.variables
+            : _event.type === "scene.patch"
+              ? _event.data.patch.variables
+              : undefined;
+        if (backdrop) warmSceneMedia(backdrop);
         if (mounted.current && generation.current === currentGeneration) setState(nextState);
       },
     });
