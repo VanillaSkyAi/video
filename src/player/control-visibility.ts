@@ -1,37 +1,62 @@
+import { createFullscreenController, type FullscreenController } from "./fullscreen.js";
+
 const STYLE_ID = "vanillasky-player-control-visibility";
-export {};
 
-type WebkitAudioWindow = Window & { webkitAudioContext?: typeof AudioContext };
-const soundtrackOutputs = new WeakMap<HTMLAudioElement, AudioContext>();
+interface SoundtrackOutput {
+  context: AudioContext;
+  source: MediaElementAudioSourceNode;
+  gain: GainNode;
+}
 
-function unlockSoundtrack(event: Event): void {
-  const target = event.target;
-  if (!(target instanceof Element)) return;
-  const audio = target.closest<HTMLElement>('[data-testid="video-player"]')?.querySelector<HTMLAudioElement>("audio");
-  if (!audio) return;
-  const existing = soundtrackOutputs.get(audio);
+const outputs = new Map<HTMLAudioElement, SoundtrackOutput>();
+const fullscreenControllers = new Map<HTMLElement, FullscreenController>();
+
+export async function togglePlayerFullscreen(container: HTMLElement, onModeChange: (mode: "none" | "native" | "fallback") => void): Promise<void> {
+  let controller = fullscreenControllers.get(container);
+  if (!controller) {
+    controller = createFullscreenController(container, onModeChange);
+    fullscreenControllers.set(container, controller);
+  }
+  await controller.toggle();
+}
+
+function dispose(audio: HTMLAudioElement): void {
+  const output = outputs.get(audio);
+  if (!output) return;
+  output.source.disconnect();
+  output.gain.disconnect();
+  void output.context.close();
+  outputs.delete(audio);
+  delete audio.dataset.audioOutput;
+  Reflect.deleteProperty(audio, "volume");
+}
+
+export default function attachSoundtrack(audio: HTMLAudioElement, context: AudioContext, initialVolume: number): void {
+  const existing = outputs.get(audio);
   if (existing) {
-    void existing.resume().catch(() => undefined);
+    void context.close();
+    void existing.context.resume().catch(() => undefined);
     return;
   }
   const original = audio.volume;
+  let settable = false;
   try {
     audio.volume = original === 0.5 ? 0.25 : 0.5;
-    const settable = audio.volume !== original;
+    settable = audio.volume !== original;
     audio.volume = original;
-    if (settable) return;
   } catch {
-    // Continue to the gain fallback when element volume is device-controlled.
+    // iOS may reject element-volume writes; the gain fallback still works.
   }
   try {
     const url = new URL(audio.currentSrc || audio.src, document.baseURI);
-    if (url.origin !== location.origin && url.protocol !== "blob:" && url.protocol !== "data:") return;
-    const Context = window.AudioContext ?? (window as WebkitAudioWindow).webkitAudioContext;
-    if (!Context) return;
-    const context = new Context();
+    if (settable || (url.origin !== location.origin && url.protocol !== "blob:" && url.protocol !== "data:")) {
+      audio.dataset.audioOutput = "true";
+      void context.close();
+      return;
+    }
     const source = context.createMediaElementSource(audio);
     const gain = context.createGain();
-    let volume = Number(audio.dataset.volume ?? original);
+    let volume = initialVolume;
     gain.gain.value = volume;
     source.connect(gain);
     gain.connect(context.destination);
@@ -43,12 +68,32 @@ function unlockSoundtrack(event: Event): void {
         gain.gain.value = next;
       },
     });
-    soundtrackOutputs.set(audio, context);
-    void context.resume().catch(() => undefined);
+    audio.dataset.audioOutput = "true";
+    outputs.set(audio, { context, source, gain });
   } catch {
-    // Keep direct media-element playback if Web Audio setup is unavailable.
+    void context.close();
   }
 }
+
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const audio = target.closest<HTMLElement>('[data-testid="video-player"]')?.querySelector<HTMLAudioElement>("audio");
+  const output = audio ? outputs.get(audio) : undefined;
+  if (output) void output.context.resume().catch(() => undefined);
+}, true);
+
+new MutationObserver(() => {
+  for (const audio of outputs.keys()) {
+    if (!audio.isConnected) dispose(audio);
+  }
+  for (const [container, controller] of fullscreenControllers) {
+    if (!container.isConnected) {
+      controller.dispose();
+      fullscreenControllers.delete(container);
+    }
+  }
+}).observe(document, { childList: true, subtree: true });
 
 if (!document.getElementById(STYLE_ID)) {
   const style = document.createElement("style");
@@ -76,5 +121,4 @@ if (!document.getElementById(STYLE_ID)) {
       container.dataset.touchControls = String(container.dataset.touchControls !== "true");
     }
   });
-  document.addEventListener("click", unlockSoundtrack, true);
 }

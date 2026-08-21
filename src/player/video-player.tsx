@@ -88,7 +88,6 @@ function savedVideoState(video: Video): VideoState {
 
 type PlayerIconName = "enter-fullscreen" | "exit-fullscreen" | "pause" | "play" | "replay" | "volume" | "volume-off";
 type FullscreenMode = "none" | "native" | "fallback";
-type FullscreenController = import("./fullscreen.js").FullscreenController;
 
 function PlayerIcon({ name, size = 22 }: { name: PlayerIconName; size?: number }): ReactElement {
   const shared = {
@@ -101,14 +100,13 @@ function PlayerIcon({ name, size = 22 }: { name: PlayerIconName; size?: number }
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
     "aria-hidden": true,
-    focusable: false,
   };
 
   if (name === "play") {
     return <svg {...shared}><path d="M8 5v14l11-7z" fill="currentColor" stroke="none" /></svg>;
   }
   if (name === "pause") {
-    return <svg {...shared}><rect x="7" y="5" width="3.5" height="14" rx="1" fill="currentColor" stroke="none" /><rect x="13.5" y="5" width="3.5" height="14" rx="1" fill="currentColor" stroke="none" /></svg>;
+    return <svg {...shared}><path d="M7 5h4v14H7zm6 0h4v14h-4z" fill="currentColor" stroke="none" /></svg>;
   }
   if (name === "replay") {
     return <svg {...shared}><path d="M4.5 9A8 8 0 1 1 5 16" /><path d="M4.5 4.5V9H9" /></svg>;
@@ -176,13 +174,23 @@ export function VideoPlayerRuntime({
   const stateRef = useRef(state);
   const timeRef = useRef(currentTime);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const fullscreenControllerRef = useRef<FullscreenController | null>(null);
   const introStartedAtRef = useRef<number | null>(autoStartGeneration ? performance.now() : null);
   const callbacksRef = useRef({ onComplete, onError, onStateChange });
 
   stateRef.current = state;
   timeRef.current = currentTime;
   callbacksRef.current = { onComplete, onError, onStateChange };
+
+  const primeSoundtrack = () => {
+    const audio = audioRef.current;
+    if (!audio || audio.dataset.audioOutput) return;
+    const Context = window.AudioContext
+      ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Context) return;
+    const context = new Context();
+    context.resume().catch(Boolean);
+    import("./control-visibility.js").then((output) => output.default(audio, context, stateRef.current.config?.audio?.volume ?? 1));
+  };
 
   if (stream !== activeStream) {
     const autoStartReplacement = Boolean(playbackMode && stream && shouldAutoPlay && !reducedMotion);
@@ -214,12 +222,11 @@ export function VideoPlayerRuntime({
     return () => preference.removeEventListener?.("change", handleChange);
   }, []);
 
-  useEffect(() => setIsMuted(resolvedStartMuted), [resolvedStartMuted]);
-
   useEffect(() => {
-    void import("./control-visibility.js");
-    return () => fullscreenControllerRef.current?.dispose();
+    import("./control-visibility.js");
   }, []);
+
+  useEffect(() => setIsMuted(resolvedStartMuted), [resolvedStartMuted]);
 
   useEffect(() => {
     let cancelled = false;
@@ -417,8 +424,7 @@ export function VideoPlayerRuntime({
       : streamOrientation
     : orientationOverride ?? streamOrientation;
   const dimensions = getDimensions(orientation);
-  const naturalDisplayWidth = (width ?? observedWidth) || dimensions.width;
-  const displayWidth = naturalDisplayWidth;
+  const displayWidth = (width ?? observedWidth) || dimensions.width;
   const displayHeight = displayWidth * dimensions.height / dimensions.width;
   const scale = displayWidth / dimensions.width;
   const config = state.config;
@@ -496,19 +502,16 @@ export function VideoPlayerRuntime({
     if (isPlaying) setIsPlaying(false);
     else startPlayback();
   };
-  const toggleFullscreen = async () => {
+  const toggleFullscreen = () => {
     const container = containerRef.current;
     if (!container) return;
-    const controller = fullscreenControllerRef.current ??= (await import("./fullscreen.js"))
-      .createFullscreenController(container, setFullscreenMode);
-    await controller.toggle();
+    void import("./control-visibility.js").then((output) => output.togglePlayerFullscreen(container, setFullscreenMode));
   };
   const controlSize = Math.max(40, Math.min(52, Math.round(displayWidth * 0.15)));
   const controlInset = Math.max(10, Math.min(20, Math.round(displayWidth * 0.056)));
   const controlButtonStyle: CSSProperties = {
     display: "inline-grid",
     placeItems: "center",
-    flex: "0 0 auto",
     width: controlSize,
     height: controlSize,
     minWidth: controlSize,
@@ -559,6 +562,8 @@ export function VideoPlayerRuntime({
       role="region"
       aria-label={ariaLabel}
       tabIndex={0}
+      onClickCapture={primeSoundtrack}
+      onKeyDownCapture={primeSoundtrack}
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && (event.key === " " || event.key === "Enter")) {
           event.preventDefault();
@@ -662,9 +667,9 @@ export function VideoPlayerRuntime({
       ) : null}
       {config?.audio ? (
         <audio
+          key={config.audio.audioUrl}
           ref={audioRef}
           src={config.audio.audioUrl}
-          data-volume={config.audio.volume ?? 1}
           autoPlay={isPlaying}
           muted={isMuted}
           preload="auto"

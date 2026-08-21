@@ -872,7 +872,7 @@ describe("VideoPlayer", () => {
         trackId: "soundtrack",
         audioUrl: "data:audio/wav;base64,UklGRg==",
         duration: 4,
-        volume: 1,
+        volume: 0.2,
         fadeOutMs: 2_000,
         beatDetection: { sensitivity: 0.5 },
         beatMarkers: [],
@@ -891,19 +891,23 @@ describe("VideoPlayer", () => {
       startMuted: false,
     }));
 
-    await waitFor(() => expect(document.getElementById("vanillasky-player-control-visibility")).not.toBeNull());
     fireEvent.click(view.getByRole("button", { name: "Play video with sound" }));
     await waitFor(() => expect(resume).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(createMediaElementSource).toHaveBeenCalledWith(view.container.querySelector("audio")));
     expect(sourceConnect).toHaveBeenCalledTimes(1);
     expect(gainConnect).toHaveBeenCalledTimes(1);
+    expect(gain.value).toBe(0.2);
 
     act(() => nextFrame?.(performance.now() + 3_000));
-    expect(gain.value).toBeCloseTo(0.5, 1);
+    expect(gain.value).toBeCloseTo(0.1, 1);
 
     act(() => nextFrame?.(performance.now() + 4_000));
     expect(gain.value).toBe(0);
     expect(pause).toHaveBeenCalled();
+
+    view.unmount();
+    await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(2));
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it("keeps cross-origin soundtracks on the media element when volume control is unavailable", async () => {
