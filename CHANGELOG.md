@@ -4,6 +4,8 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
+## 0.3.1
+
 - Redesigns player controls for each playback state with responsive circular
   icon controls, a sound-first start action, and a dimmed replay treatment that
   leaves the completed poster frame visible.
