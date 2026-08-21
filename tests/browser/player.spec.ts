@@ -105,7 +105,11 @@ test("presents idle, playing, paused, and ended player states with the productio
   await playing.locator('[data-testid="video-player"]').hover();
   await expect(playing.locator('[data-testid="video-controls"]')).toHaveCSS("opacity", "1");
   await expect(playing.getByRole("button", { name: "Pause video response" })).toBeVisible();
-  await expect(playing.locator('[data-testid="video-controls"]')).toHaveAttribute("data-layout", "split");
+  const [primaryControls, secondaryControls] = await Promise.all([
+    playing.locator('[data-testid="video-primary-controls"]').boundingBox(),
+    playing.locator('[data-testid="video-secondary-controls"]').boundingBox(),
+  ]);
+  expect((primaryControls?.x ?? 0) + (primaryControls?.width ?? 0)).toBeLessThan(secondaryControls?.x ?? 0);
 
   const paused = page.locator('[data-player-state="paused"]');
   await paused.getByRole("button", { name: "Play video with sound" }).click();
