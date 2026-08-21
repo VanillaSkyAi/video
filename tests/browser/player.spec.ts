@@ -100,14 +100,27 @@ test("presents idle, playing, paused, and ended player states with the productio
 
   const playing = page.locator('[data-player-state="playing"]');
   await playing.getByRole("button", { name: "Play video with sound" }).click();
+  await page.mouse.move(0, 0);
+  await expect(playing.locator('[data-testid="video-controls"]')).toHaveCSS("opacity", "0");
+  await playing.locator('[data-testid="video-player"]').hover();
+  await expect(playing.locator('[data-testid="video-controls"]')).toHaveCSS("opacity", "1");
   await expect(playing.getByRole("button", { name: "Pause video response" })).toBeVisible();
-  await expect(playing.locator('[data-testid="video-controls"]')).toHaveAttribute("data-layout", "split");
+  const [primaryControls, secondaryControls] = await Promise.all([
+    playing.locator('[data-testid="video-primary-controls"]').boundingBox(),
+    playing.locator('[data-testid="video-secondary-controls"]').boundingBox(),
+  ]);
+  expect((primaryControls?.x ?? 0) + (primaryControls?.width ?? 0)).toBeLessThan(secondaryControls?.x ?? 0);
 
   const paused = page.locator('[data-player-state="paused"]');
   await paused.getByRole("button", { name: "Play video with sound" }).click();
   await page.waitForTimeout(800);
   await paused.getByRole("button", { name: "Pause video response" }).click();
   await expect(paused.getByRole("button", { name: "Play video response" })).toBeVisible();
+  await expect(paused.locator('[data-testid="video-controls"]')).toHaveCSS("opacity", "1");
+  await page.mouse.move(0, 0);
+  await paused.getByRole("button", { name: "Play video response" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(paused.locator('[data-testid="video-controls"]')).toHaveCSS("opacity", "1");
 
   const ended = page.locator('[data-player-state="ended"]');
   await ended.getByRole("button", { name: "Play video with sound" }).click();
@@ -123,6 +136,93 @@ test("presents idle, playing, paused, and ended player states with the productio
     await expect(primary.locator("svg")).toHaveCount(1);
     await expect(secondary.first().locator("svg")).toHaveCount(1);
   }
+});
+
+test("uses a viewport-filling fullscreen fallback when the browser API is unavailable", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Focused mobile fallback runs once in Chromium.");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.play = async () => undefined;
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(HTMLElement.prototype, "webkitRequestFullscreen", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(HTMLElement.prototype, "webkitRequestFullScreen", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+  await page.goto("http://127.0.0.1:4274/tests/browser/fixtures/player-states.html");
+
+  const player = page.locator('[data-player-state="playing"] [data-testid="video-player"]');
+  await page.locator('[data-player-state="playing"]').getByRole("button", { name: "Play video with sound" }).click();
+  await player.dispatchEvent("touchstart");
+  await page.locator('[data-player-state="playing"]').getByRole("button", { name: "Enter fullscreen" }).click();
+
+  await expect(player).toHaveAttribute("data-fullscreen", "fallback");
+  await expect(player).toHaveCSS("position", "fixed");
+  const bounds = await player.boundingBox();
+  expect(bounds).toMatchObject({ x: 0, y: 0, width: 390, height: 844 });
+  const frameBounds = await player.locator('[data-video-frame="ready"]').boundingBox();
+  expect(frameBounds?.width).toBeCloseTo(390, 0);
+  expect(frameBounds?.height).toBeCloseTo(693, 0);
+  expect(frameBounds?.y).toBeCloseTo((844 - 693) / 2, 0);
+  await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
+
+  await page.keyboard.press("Escape");
+  await expect(player).toHaveAttribute("data-fullscreen", "none");
+  await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+});
+
+test("keeps touch controls accessible without pinning them across resume and fullscreen", async ({ browser, browserName }) => {
+  test.skip(browserName !== "webkit", "Mobile touch lifecycle runs in WebKit.");
+  const context = await browser.newContext({
+    viewport: { width: 430, height: 932 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.play = async () => undefined;
+    Object.defineProperties(HTMLElement.prototype, {
+      requestFullscreen: { configurable: true, value: undefined },
+      webkitRequestFullscreen: { configurable: true, value: undefined },
+      webkitRequestFullScreen: { configurable: true, value: undefined },
+    });
+  });
+  await page.goto("http://127.0.0.1:4274/tests/browser/fixtures/player-states.html");
+  await page.addStyleTag({ content: [
+    ".state-showcase { display: block !important; width: 100% !important; min-width: 0 !important; padding: 16px !important; }",
+    ".state-showcase section { display: none !important; }",
+    ".state-showcase section[data-player-state='idle'] { display: grid !important; }",
+  ].join("\n") });
+
+  const state = page.locator('[data-player-state="idle"]');
+  const player = state.locator('[data-testid="video-player"]');
+  const controls = state.locator('[data-testid="video-controls"]');
+  await state.getByRole("button", { name: "Play video with sound" }).tap();
+  await expect(controls).toHaveCSS("opacity", "0");
+
+  await player.tap({ position: { x: 190, y: 300 } });
+  await expect(controls).toHaveCSS("opacity", "1");
+  await state.getByRole("button", { name: "Pause video response" }).tap();
+  await expect(controls).toHaveCSS("opacity", "1");
+  await state.getByRole("button", { name: "Play video response" }).tap();
+  await expect(controls).toHaveCSS("opacity", "0");
+
+  await player.tap({ position: { x: 190, y: 300 } });
+  await state.getByRole("button", { name: "Enter fullscreen" }).tap();
+  await expect(player).toHaveAttribute("data-fullscreen", "fallback");
+  await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
+  await state.getByRole("button", { name: "Exit fullscreen" }).tap();
+  await expect(player).toHaveAttribute("data-fullscreen", "none");
+  await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+
+  await context.close();
 });
 
 test("loads the minimal public example and surfaces route failures", async ({ page }) => {

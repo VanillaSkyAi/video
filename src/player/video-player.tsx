@@ -87,6 +87,8 @@ function savedVideoState(video: Video): VideoState {
 }
 
 type PlayerIconName = "enter-fullscreen" | "exit-fullscreen" | "pause" | "play" | "replay" | "volume" | "volume-off";
+type FullscreenMode = "none" | "native" | "fallback";
+type FullscreenController = import("./fullscreen.js").FullscreenController;
 
 function PlayerIcon({ name, size = 22 }: { name: PlayerIconName; size?: number }): ReactElement {
   const shared = {
@@ -161,7 +163,7 @@ export function VideoPlayerRuntime({
   const autoStartGeneration = Boolean(playbackMode && stream && shouldAutoPlay && !reducedMotion);
   const [isPlaying, setIsPlaying] = useState(() => shouldAutoPlay && !reducedMotion && !autoStartGeneration);
   const [isMuted, setIsMuted] = useState(resolvedStartMuted);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenMode, setFullscreenMode] = useState<FullscreenMode>("none");
   const [state, setState] = useState<VideoState>(() => video ? savedVideoState(video) : createVideoState());
   const [currentTime, setCurrentTime] = useState(0);
   const [activeStream, setActiveStream] = useState(stream);
@@ -174,6 +176,7 @@ export function VideoPlayerRuntime({
   const stateRef = useRef(state);
   const timeRef = useRef(currentTime);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const fullscreenControllerRef = useRef<FullscreenController | null>(null);
   const introStartedAtRef = useRef<number | null>(autoStartGeneration ? performance.now() : null);
   const callbacksRef = useRef({ onComplete, onError, onStateChange });
 
@@ -214,9 +217,8 @@ export function VideoPlayerRuntime({
   useEffect(() => setIsMuted(resolvedStartMuted), [resolvedStartMuted]);
 
   useEffect(() => {
-    const updateFullscreen = () => setIsFullscreen(document.fullscreenElement === containerRef.current);
-    document.addEventListener("fullscreenchange", updateFullscreen);
-    return () => document.removeEventListener("fullscreenchange", updateFullscreen);
+    void import("./control-visibility.js");
+    return () => fullscreenControllerRef.current?.dispose();
   }, []);
 
   useEffect(() => {
@@ -283,7 +285,9 @@ export function VideoPlayerRuntime({
     if (width != null) return;
     const container = containerRef.current;
     if (!container) return;
-    const update = () => setObservedWidth(container.clientWidth);
+    const update = () => {
+      setObservedWidth(container.clientWidth);
+    };
     update();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(update);
@@ -405,14 +409,16 @@ export function VideoPlayerRuntime({
   }, [startRequested, state.config?.audio?.volume, state.config?.scenes.length, state.status]);
 
   const streamOrientation = state.config?.orientation ?? "portrait";
-  const responsiveWidth = width ?? observedWidth;
+  const isFullscreen = fullscreenMode !== "none";
+  const responsiveWidth = isFullscreen ? window.innerWidth : width ?? observedWidth;
   const orientation = orientationOverride === "auto"
     ? responsiveWidth > 0
       ? responsiveWidth <= responsiveBreakpoint ? "portrait" : "landscape"
       : streamOrientation
     : orientationOverride ?? streamOrientation;
   const dimensions = getDimensions(orientation);
-  const displayWidth = (width ?? observedWidth) || dimensions.width;
+  const naturalDisplayWidth = (width ?? observedWidth) || dimensions.width;
+  const displayWidth = naturalDisplayWidth;
   const displayHeight = displayWidth * dimensions.height / dimensions.width;
   const scale = displayWidth / dimensions.width;
   const config = state.config;
@@ -434,6 +440,7 @@ export function VideoPlayerRuntime({
     : currentTime;
   const startPlayback = () => {
     setGenerationIntroComplete(true);
+    containerRef.current?.setAttribute("data-touch-controls", "false");
     const audio = audioRef.current;
     if (audio) {
       void audio.play()
@@ -492,8 +499,9 @@ export function VideoPlayerRuntime({
   const toggleFullscreen = async () => {
     const container = containerRef.current;
     if (!container) return;
-    if (document.fullscreenElement === container) await document.exitFullscreen?.();
-    else await container.requestFullscreen?.();
+    const controller = fullscreenControllerRef.current ??= (await import("./fullscreen.js"))
+      .createFullscreenController(container, setFullscreenMode);
+    await controller.toggle();
   };
   const controlSize = Math.max(40, Math.min(52, Math.round(displayWidth * 0.15)));
   const controlInset = Math.max(10, Math.min(20, Math.round(displayWidth * 0.056)));
@@ -571,6 +579,7 @@ export function VideoPlayerRuntime({
       data-generation-intro-complete={generationIntroComplete}
       data-audio-unlocked={audioUnlocked}
       data-playback-mode={playbackMode ?? "custom"}
+      data-fullscreen={fullscreenMode}
       className={className}
       style={{
         width: width ?? "100%",
@@ -629,7 +638,8 @@ export function VideoPlayerRuntime({
           playing={isPlaying}
           style={{
             position: "absolute",
-            inset: 0,
+            left: 0,
+            top: 0,
             transform: `scale(${scale})`,
             transformOrigin: "top left",
           }}
@@ -688,7 +698,6 @@ export function VideoPlayerRuntime({
       </button> : null}
       {!generationCoverVisible && !showStartPoster && config?.scenes.length ? <div
         data-testid="video-controls"
-        data-layout="split"
         style={{
           position: "absolute",
           inset: 0,
