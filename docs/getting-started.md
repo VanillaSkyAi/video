@@ -5,7 +5,7 @@
 Install VanillaSky:
 
 ```bash
-npm install @vanillaskyai/video@0.3.1 ai @ai-sdk/openai
+npm install @vanillaskyai/video@0.3.2 ai @ai-sdk/openai
 ```
 
 Set your provider key in `.env.local` (never commit it):
@@ -50,7 +50,7 @@ sets its marker only for `next dev`, and it accepts only localhost. Every
 production request is denied. Replace it with your real session validation
 before deploying. For literal files and commands,
 use the tested
-[`examples/nextjs-quickstart` directory](https://github.com/VanillaSkyAi/video/tree/v0.3.1/examples/nextjs-quickstart).
+[`examples/nextjs-quickstart` directory](https://github.com/VanillaSkyAi/video/tree/v0.3.2/examples/nextjs-quickstart).
 
 `model` can come from any AI SDK provider, registry, gateway, compatible API,
 or custom implementation. The application can choose a cheaper or faster model
