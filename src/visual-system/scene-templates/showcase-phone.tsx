@@ -12,7 +12,7 @@ import { TemplateText } from "./template-text";
 import type { TextArchetype } from "../typography";
 import { PhoneFrame } from "../primitives/devices/PhoneFrame";
 import { resolveProductSurfaceMotion } from "../primitives/devices/product-surface-config";
-import { SceneBackground, getMediaBackgroundProps } from "./scene-background";
+import { SceneBackground, getMediaBackgroundProps, hasSceneMedia } from "./scene-background";
 
 // ─── Component ──────────────────────────────────────────────────
 
@@ -70,6 +70,7 @@ export const ShowcasePhoneTemplate: React.FC<SceneTemplateProps> = ({
 
       {/* [slot: caption] Headline — top text area */}
       <TemplateText
+        overMedia={hasSceneMedia(variables)}
         motionProgress={motionProgress}
         typeTreatment={tokens.preset.type}
         archetype={(textArchetype as TextArchetype) ?? "subtle"}

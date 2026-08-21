@@ -4,6 +4,18 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
+- Rebuilds text legibility over photo and video backdrops. Scrims now ramp off
+  an eased curve instead of a two-stop linear fade, so they no longer leave a
+  visible band across the frame, and they are shaped to where each template's
+  copy actually sits rather than washing the whole picture. Type over media
+  carries its own halo, which lets the scrims stay lighter: the footage keeps
+  its contrast and highlights while the headline stays readable.
+- Stops darkening the brand gradient for media that never arrives. A dead,
+  blocked, or unresolved `mediaUrl` used to leave the full scrim stack over
+  the gradient fallback, so the scene rendered as a muddy, vignetted version
+  of the gradient scenes beside it. The fallback is now the clean gradient it
+  was always documented to be.
+
 ## 0.3.1
 
 - Redesigns player controls for each playback state with responsive circular

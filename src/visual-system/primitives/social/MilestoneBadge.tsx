@@ -45,12 +45,11 @@ import {
   SPRING_SMOOTH,
   SPRING_BOUNCY,
 } from "../../motion";
-import { accessibleTextColor, withOpacity } from "../../theme";
 import { stripPipe } from "../../typography";
 import { Emoji } from "../../emoji";
 import { renderWithEmoji } from "../../emoji/emoji-text";
 import { ConfettiLayer } from "../../scene-templates/confetti-layer";
-import { TOKEN_DEFAULTS } from "../../theme";
+import { accessibleTextColor, withOpacity, MEDIA_TEXT_SHADOW, TOKEN_DEFAULTS } from "../../theme";
 
 const CLAMP = {
   extrapolateLeft: "clamp" as const,
@@ -111,9 +110,7 @@ export const MilestoneBadge: React.FC<MilestoneBadgeProps> = ({
 
   const mainTextColor = hasMedia ? "#FFFFFF" : foreground;
   const pillTextColor = accessibleTextColor(surfaceElevated, foreground);
-  const mediaTextShadow = hasMedia
-    ? "0 2px 8px rgba(0,0,0,0.55), 0 6px 16px rgba(0,0,0,0.35)"
-    : undefined;
+  const mediaTextShadow = hasMedia ? MEDIA_TEXT_SHADOW : undefined;
 
   // ── Timing (mirror social-milestone source) ────────────────────
   // Counter rolls from progress 0.056 to 0.556

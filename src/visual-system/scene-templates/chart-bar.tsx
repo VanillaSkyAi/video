@@ -6,7 +6,7 @@ import { resolveTokens } from "../theme";
 import { TemplateText } from "./template-text";
 import { TOP_TEXT_AREA_RATIO } from "../backgrounds";
 import { BarChart, type BarChartDatum } from "../primitives/charts/BarChart";
-import { SceneBackground, getMediaBackgroundProps } from "./scene-background";
+import { SceneBackground, getMediaBackgroundProps, hasSceneMedia } from "./scene-background";
 
 function parseBarDatum(value: unknown): BarChartDatum | undefined {
   if (typeof value === "number") {
@@ -108,6 +108,7 @@ export const ChartBarTemplate: React.FC<SceneTemplateProps> = ({
       {/* [slot: caption] */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: height * TOP_TEXT_AREA_RATIO, overflow: "visible" }}>
         <TemplateText
+        overMedia={hasSceneMedia(variables)}
           motionProgress={motionProgress}
           typeTreatment={resolveTokens(style).preset.type}
           archetype="subtle"

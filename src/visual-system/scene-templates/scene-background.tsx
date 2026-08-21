@@ -20,13 +20,17 @@
  * Behavior:
  *   - Brand gradient is the always-on backdrop (uses BrandGradientOverlay).
  *   - When mediaUrl is set and mediaType isn't "gradient", the photo/video
- *     covers the gradient. Vignette + bottom-half darken give the content
- *     contrast against busy footage.
+ *     covers the gradient. Legibility is then split between two instruments:
+ *     eased scrims shaped to where the template's copy sits (`textAnchor`),
+ *     and a per-glyph halo on the type itself (MEDIA_TEXT_SHADOW). Neither
+ *     alone can hold white type over a blown-out highlight without flattening
+ *     the picture; together they do it at roughly half the darkening.
  *   - mediaType="gradient" deliberately ignores mediaUrl and renders only
  *     the brand gradient. First-class atmospheric mode.
- *   - When mediaUrl is empty / 404s / Pexels search returned nothing,
- *     gradient shows through cleanly (matches every other gradient-backed
- *     template).
+ *   - When mediaUrl is empty, 404s, is blocked, or Pexels search returned
+ *     nothing, the gradient shows through cleanly and no scrim is painted —
+ *     a scrim over a bare gradient is just a muddy gradient. Enforced, not
+ *     assumed: the media has to load before anything darkens for it.
  *
  * Extracted from bg-media.tsx so any template can compose it. bg-media
  * now uses this component too — its "media is the scene" identity comes
@@ -34,7 +38,7 @@
  * duplicated render logic.
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { TemplateStyle } from "../template-context";
 import { BrandGradientOverlay } from "../backgrounds";
 import { getBackgroundTransform } from "../backgrounds";
@@ -73,49 +77,104 @@ export function resolveMediaTreatment(value: string): MediaTreatment {
 }
 
 export interface MediaTreatmentLayer {
-  id: "vignette" | "full-wash" | "center-scrim" | "bottom-scrim";
+  id: "vignette" | "center-scrim" | "bottom-scrim";
   background: string;
   style?: React.CSSProperties;
 }
 
-/** Export-safe contrast recipes. Overlays only: SVG capture cannot rely on CSS filters. */
-export function getMediaTreatmentLayers(value: string): MediaTreatmentLayer[] {
+/**
+ * Where the template puts its type. The scrim is shaped to the copy, not to
+ * the frame: darkening picture the type never touches costs contrast in the
+ * photo and buys no legibility. "full" is the conservative default for
+ * templates that have not declared an anchor.
+ */
+export type MediaTextAnchor = "center" | "bottom" | "full";
+
+/**
+ * Smoothstep-sampled alpha stops between `start`% and `end`% of the gradient
+ * box, held at full strength before `start` and after `end`.
+ *
+ * A two-stop `rgba(0,0,0,a) → transparent` scrim ramps alpha linearly, so it
+ * ends with a constant slope. Lateral inhibition in the eye amplifies that
+ * slope discontinuity into a visible band — the grey bar cutting across the
+ * frame that makes an overlay read as an overlay. Smoothstep flattens the
+ * curve at both ends, so the scrim holds where the type sits and then leaves
+ * without an edge: the same peak coverage over the copy, noticeably less of
+ * the picture spent getting there.
+ */
+const SCRIM_STOP_COUNT = 7;
+
+function smoothstep(t: number): number {
+  return t * t * (3 - 2 * t);
+}
+
+function easedStops(
+  peakAlpha: number,
+  start: number,
+  end: number,
+  direction: "fade-out" | "fade-in",
+): string {
+  const alphaAt = (t: number): string => {
+    const eased = direction === "fade-out" ? 1 - smoothstep(t) : smoothstep(t);
+    return `rgba(0,0,0,${Number((peakAlpha * eased).toFixed(3))})`;
+  };
+  const stops: string[] = [];
+  if (start > 0) stops.push(`${alphaAt(0)} 0%`);
+  for (let i = 0; i < SCRIM_STOP_COUNT; i += 1) {
+    const t = i / (SCRIM_STOP_COUNT - 1);
+    const position = Number((start + (end - start) * t).toFixed(2));
+    stops.push(`${alphaAt(t)} ${position}%`);
+  }
+  if (end < 100) stops.push(`${alphaAt(1)} 100%`);
+  return stops.join(", ");
+}
+
+/**
+ * Export-safe contrast recipes. Overlays only: SVG capture cannot rely on CSS
+ * filters, so a blur-behind-text plate is off the table.
+ *
+ * The scrims deliberately stop short of solving legibility on their own. A
+ * uniform darkening strong enough to carry white type over a blown-out sky
+ * needs roughly 0.8 alpha — at that point the photo is a texture, not a
+ * picture. The cheaper half of the job belongs to the type: a per-glyph halo
+ * (MEDIA_TEXT_SHADOW) buys local contrast exactly where it is needed and
+ * costs the image nothing. Scrim for the plate, halo for the glyph.
+ */
+export function getMediaTreatmentLayers(
+  value: string,
+  anchor: MediaTextAnchor = "full",
+): MediaTreatmentLayer[] {
   const treatment = resolveMediaTreatment(value);
   const vignette: MediaTreatmentLayer = {
     id: "vignette",
     background:
       treatment === "subtle"
-        ? "radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.28) 100%)"
-        : "radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.55) 80%, rgba(0,0,0,0.75) 100%)",
+        ? `radial-gradient(ellipse at center, ${easedStops(0.28, 45, 100, "fade-in")})`
+        : `radial-gradient(ellipse at center, ${easedStops(0.72, 32, 100, "fade-in")})`,
   };
   if (treatment === "subtle") return [vignette];
 
-  const cinematic: MediaTreatmentLayer[] = [
-    vignette,
-    {
-      id: "center-scrim",
-      background:
-        treatment === "text-safe"
-          ? "radial-gradient(ellipse 90% 56% at 50% 50%, rgba(0,0,0,0.36) 0%, rgba(0,0,0,0.18) 55%, transparent 84%)"
-          : "radial-gradient(ellipse 85% 50% at 50% 50%, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.10) 50%, transparent 80%)",
-    },
-    {
-      id: "bottom-scrim",
-      background:
-        treatment === "text-safe"
-          ? "linear-gradient(to top, rgba(0,0,0,0.68) 0%, transparent 100%)"
-          : "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%)",
-      style: { top: "55%" },
-    },
-  ];
+  const textSafe = treatment === "text-safe";
+  const layers: MediaTreatmentLayer[] = [vignette];
 
-  if (treatment === "text-safe") {
-    cinematic.splice(1, 0, {
-      id: "full-wash",
-      background: "rgba(0,0,0,0.30)",
+  if (anchor !== "bottom") {
+    layers.push({
+      id: "center-scrim",
+      background: textSafe
+        ? `radial-gradient(ellipse 92% 58% at 50% 50%, ${easedStops(0.46, 34, 90, "fade-out")})`
+        : `radial-gradient(ellipse 88% 52% at 50% 50%, ${easedStops(0.26, 30, 88, "fade-out")})`,
     });
   }
-  return cinematic;
+
+  if (anchor !== "center") {
+    layers.push({
+      id: "bottom-scrim",
+      background: `linear-gradient(to top, ${easedStops(textSafe ? 0.64 : 0.5, 8, 100, "fade-out")})`,
+      style: { top: "55%" },
+    });
+  }
+
+  return layers;
 }
 
 export function resolveMediaType(
@@ -127,6 +186,18 @@ export function resolveMediaType(
   if (mediaType === "photo") return "photo";
   // "auto" — detect from URL extension
   return mediaUrl && isVideoUrl(mediaUrl) ? "video" : "photo";
+}
+
+/**
+ * True when the scene actually renders a photo or video backdrop — i.e. a
+ * mediaUrl is set and the template has not been pinned to the brand gradient.
+ * Templates use it to switch their type onto the media legibility recipe.
+ */
+export function hasSceneMedia(variables: Record<string, unknown>): boolean {
+  return (
+    String(variables.mediaUrl || "").trim() !== "" &&
+    String(variables.mediaType || "auto") !== "gradient"
+  );
 }
 
 export function getMediaBackgroundProps(variables: Record<string, unknown>) {
@@ -155,6 +226,10 @@ export interface SceneBackgroundProps {
   mediaPosition?: string;
   /** Overlay recipe: subtle, cinematic, or stronger text-safe contrast. */
   mediaTreatment?: string;
+  /** Where this template's copy sits, so the scrim is shaped to the type
+   *  instead of to the frame. Defaults to "full" (scrim both the middle and
+   *  the lower third) for templates that have not declared an anchor. */
+  textAnchor?: MediaTextAnchor;
   /** Background motion effect (drift / pulse / Ken Burns). Applied to the photo/video. */
   backgroundEffect?: string;
   /** Stable seed for the gradient breathing animation. Pass the scene's
@@ -176,6 +251,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
   mediaPoster,
   mediaPosition = "center",
   mediaTreatment = "cinematic",
+  textAnchor = "full",
   backgroundEffect,
   seed,
   isPlaying = true,
@@ -184,10 +260,38 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
   void _width;
   void _height;
   const resolved = resolveMediaType(mediaType, mediaUrl);
-  const showMedia = resolved !== "gradient" && !!mediaUrl;
+  const wantsMedia = resolved !== "gradient" && !!mediaUrl;
+
+  // A scrim exists to hold type against footage. When the footage never
+  // arrives — dead URL, blocked host, empty stock search — the scrim is left
+  // darkening the brand gradient it was never meant to touch, and the scene
+  // reads as a muddy, vignetted version of the gradient scenes next to it.
+  // So the media has to prove it painted before anything darkens for it.
+  //
+  // Optimistic default: static and export renders never run effects, so they
+  // keep today's output byte for byte. Only a browser that observes a real
+  // failure drops back to the clean gradient.
+  const [mediaFailed, setMediaFailed] = useState(false);
+  useEffect(() => {
+    setMediaFailed(false);
+    if (!wantsMedia || resolved !== "photo") return;
+    if (typeof Image === "undefined") return;
+    let cancelled = false;
+    const probe = new Image();
+    probe.onerror = () => {
+      if (!cancelled) setMediaFailed(true);
+    };
+    probe.src = mediaUrl;
+    return () => {
+      cancelled = true;
+      probe.onerror = null;
+    };
+  }, [mediaUrl, resolved, wantsMedia]);
+
+  const showMedia = wantsMedia && !mediaFailed;
   const resolvedPosition = resolveMediaPosition(mediaPosition);
   const resolvedTreatment = resolveMediaTreatment(mediaTreatment);
-  const treatmentLayers = getMediaTreatmentLayers(resolvedTreatment);
+  const treatmentLayers = getMediaTreatmentLayers(resolvedTreatment, textAnchor);
 
   const gradSeed =
     typeof seed === "number"
@@ -282,6 +386,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
             // decode the first frame; "auto" kicks that work off the instant
             // the element mounts.
             preload="auto"
+            onError={() => setMediaFailed(true)}
             data-media-position={mediaPosition}
             style={{
               position: "absolute",

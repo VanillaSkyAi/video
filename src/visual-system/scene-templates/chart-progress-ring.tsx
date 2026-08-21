@@ -12,7 +12,7 @@ import { resolveTokens } from "../theme";
 import { TemplateText } from "./template-text";
 import { TOP_TEXT_AREA_RATIO } from "../backgrounds";
 import { ProgressRing } from "../primitives/charts/ProgressRing";
-import { SceneBackground, getMediaBackgroundProps } from "./scene-background";
+import { SceneBackground, getMediaBackgroundProps, hasSceneMedia } from "./scene-background";
 
 // ─── Component ──────────────────────────────────────────────────
 
@@ -71,6 +71,7 @@ export const ChartProgressRingTemplate: React.FC<SceneTemplateProps> = ({
       {/* [slot: caption] */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: height * TOP_TEXT_AREA_RATIO, overflow: "visible" }}>
         <TemplateText
+        overMedia={hasSceneMedia(variables)}
           motionProgress={motionProgress}
           typeTreatment={resolveTokens(style).preset.type}
           archetype="subtle"

@@ -10,7 +10,7 @@ import { resolveTokens } from "../theme";
 import { TemplateText } from "./template-text";
 import { withOpacity } from "../theme";
 import { TOP_TEXT_AREA_RATIO } from "../backgrounds";
-import { SceneBackground, getMediaBackgroundProps } from "./scene-background";
+import { SceneBackground, getMediaBackgroundProps, hasSceneMedia } from "./scene-background";
 import { ConfettiLayer } from "./confetti-layer";
 import { getResponsiveFontSize } from "../typography";
 import { CountUpNumber } from "../primitives/typography/CountUpNumber";
@@ -121,6 +121,7 @@ export const ChartCounterTemplate: React.FC<SceneTemplateProps> = ({
       {/* [slot: caption] Headline — top text area (TemplateText) */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: height * TOP_TEXT_AREA_RATIO, overflow: "visible" }}>
         <TemplateText
+        overMedia={hasSceneMedia(variables)}
           motionProgress={motionProgress}
           typeTreatment={resolveTokens(style).preset.type}
           archetype="subtle"

@@ -393,3 +393,17 @@ export function lighten(hex: string, factor: number): string {
   const lb = Math.min(255, Math.round(b + (255 - b) * factor));
   return `#${lr.toString(16).padStart(2, "0")}${lg.toString(16).padStart(2, "0")}${lb.toString(16).padStart(2, "0")}`;
 }
+
+/**
+ * Per-glyph halo for type sitting directly on photo or video.
+ *
+ * A frame-wide scrim can only trade picture for contrast, and it loses that
+ * trade against blown-out highlights: holding white type at 4.5:1 over a
+ * near-white region needs ~0.8 alpha of black across the whole plate. A
+ * two-layer shadow buys the same local separation for free — a tight 8px pass
+ * for edge definition against fine texture, a wide 16px pass for the soft
+ * falloff that separates the word from whatever sits behind it. Export-safe:
+ * `text-shadow` survives SVG capture, `filter`/`backdrop-filter` do not.
+ */
+export const MEDIA_TEXT_SHADOW =
+  "0 2px 8px rgba(0,0,0,0.55), 0 6px 16px rgba(0,0,0,0.35)";

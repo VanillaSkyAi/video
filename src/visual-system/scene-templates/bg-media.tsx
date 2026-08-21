@@ -17,7 +17,7 @@ import type { SceneTemplateProps } from "./types";
 import { resolveTokens } from "../theme";
 import { TemplateText } from "./template-text";
 import type { TextArchetype } from "../typography";
-import { SceneBackground, getMediaBackgroundProps } from "./scene-background";
+import { SceneBackground, getMediaBackgroundProps, hasSceneMedia } from "./scene-background";
 import { ConfettiLayer } from "./confetti-layer";
 
 // ─── Component ──────────────────────────────────────────────────
@@ -58,6 +58,9 @@ export const BgMediaTemplate: React.FC<SceneTemplateProps> = ({
         width={width}
         height={height}
         {...getMediaBackgroundProps(variables)}
+        // Title is centered and full-frame, so the lower-third scrim would
+        // darken picture no type ever touches. Scrim the middle only.
+        textAnchor="center"
         backgroundEffect={backgroundEffect}
         seed={String(variables.texts || "")}
         isPlaying={isPlaying}
@@ -83,6 +86,7 @@ export const BgMediaTemplate: React.FC<SceneTemplateProps> = ({
           `|` = hard line break; the conversion is centralized in
           TemplateText so every texts-canvas template honors it. */}
       <TemplateText
+        overMedia={hasSceneMedia(variables)}
         motionProgress={motionProgress}
         typeTreatment={resolveTokens(style).preset.type}
         archetype={(textArchetype as TextArchetype) ?? "subtle"}
