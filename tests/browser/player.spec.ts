@@ -113,6 +113,10 @@ test("presents idle, playing, paused, and ended player states with the productio
   await paused.getByRole("button", { name: "Pause video response" }).click();
   await expect(paused.getByRole("button", { name: "Play video response" })).toBeVisible();
   await expect(paused.locator('[data-testid="video-controls"]')).toHaveCSS("opacity", "1");
+  await page.mouse.move(0, 0);
+  await paused.getByRole("button", { name: "Play video response" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(paused.locator('[data-testid="video-controls"]')).toHaveCSS("opacity", "1");
 
   const ended = page.locator('[data-player-state="ended"]');
   await ended.getByRole("button", { name: "Play video with sound" }).click();

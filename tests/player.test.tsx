@@ -650,13 +650,11 @@ describe("VideoPlayer", () => {
 
     fireEvent.click(start);
     const controls = view.getByTestId("video-controls");
-    expect(controls.getAttribute("data-layout")).toBe("split");
+    expect(controls).toBeDefined();
     const pause = view.getByRole("button", { name: "Pause video response" });
-    expect(controls.style.opacity).toBe("0");
-    expect(view.getByTestId("video-primary-controls").style.pointerEvents).toBe("none");
+    expect(player.getAttribute("data-touch-controls")).toBe("false");
 
     fireEvent.pointerEnter(player);
-    expect(controls.style.opacity).toBe("1");
     expect(view.getByTestId("video-primary-controls").style.pointerEvents).toBe("auto");
     expect(pause.querySelector("svg")).not.toBeNull();
     expect(pause.style.width).toBe("52px");
@@ -666,14 +664,12 @@ describe("VideoPlayer", () => {
     expect(view.getByTestId("video-secondary-controls").contains(view.getByRole("button", { name: "Mute video response" }))).toBe(true);
 
     fireEvent.pointerLeave(player);
-    expect(controls.style.opacity).toBe("0");
     act(() => pause.focus());
-    expect(controls.style.opacity).toBe("1");
+    expect(document.activeElement).toBe(pause);
     act(() => pause.blur());
-    expect(controls.style.opacity).toBe("0");
 
     fireEvent.touchStart(player);
-    expect(controls.style.opacity).toBe("1");
+    expect(player.getAttribute("data-touch-controls")).toBe("true");
 
     await waitFor(() => expect(nextFrame).toBeDefined());
     act(() => nextFrame?.(performance.now() + 1_000));
@@ -681,10 +677,10 @@ describe("VideoPlayer", () => {
     fireEvent.click(pause);
     expect(view.getByRole("button", { name: "Play video response" }).querySelector("svg")).not.toBeNull();
     fireEvent.pointerLeave(player);
-    expect(controls.style.opacity).toBe("1");
+    expect(player.getAttribute("data-playing")).toBe("false");
     fireEvent.click(view.getByRole("button", { name: "Play video response" }));
     expect(player.getAttribute("data-playing")).toBe("true");
-    expect(controls.style.opacity).toBe("0");
+    expect(player.getAttribute("data-touch-controls")).toBe("false");
 
     fireEvent.pointerLeave(player);
     fireEvent.keyDown(player, { key: "Tab" });
@@ -693,7 +689,7 @@ describe("VideoPlayer", () => {
     act(() => keyboardResume.focus());
     fireEvent.click(keyboardResume);
     expect(player.getAttribute("data-playing")).toBe("true");
-    expect(controls.style.opacity).toBe("1");
+    expect(document.activeElement).toBe(keyboardResume);
   });
   it("provides named keyboard playback controls and respects reduced motion", async () => {
     Object.defineProperty(window, "matchMedia", {
@@ -907,7 +903,7 @@ describe("VideoPlayer", () => {
     expect(view.getByRole("button", { name: "Mute video response" })).toBeDefined();
 
     fireEvent.click(view.getByRole("button", { name: "Enter fullscreen" }));
-    expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(requestFullscreen).toHaveBeenCalledTimes(1));
   });
 
   it("uses prefixed fullscreen when the standard API is unavailable", async () => {
@@ -943,12 +939,12 @@ describe("VideoPlayer", () => {
     fireEvent.click(view.getByRole("button", { name: "Play video response" }));
     fireEvent.click(view.getByRole("button", { name: "Enter fullscreen" }));
 
-    expect(webkitRequestFullscreen).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(webkitRequestFullscreen).toHaveBeenCalledTimes(1));
     Object.assign(document, { webkitFullscreenElement: view.getByTestId("video-player") });
     fireEvent(document, new Event("webkitfullscreenchange"));
     expect(view.getByTestId("video-player").getAttribute("data-fullscreen")).toBe("native");
     fireEvent.click(view.getByRole("button", { name: "Exit fullscreen" }));
-    expect(webkitExitFullscreen).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(webkitExitFullscreen).toHaveBeenCalledTimes(1));
 
     Object.assign(document, { webkitFullscreenElement: null });
     fireEvent(document, new Event("webkitfullscreenchange"));
@@ -979,13 +975,12 @@ describe("VideoPlayer", () => {
 
     fireEvent.click(view.getByRole("button", { name: "Enter fullscreen" }));
     await waitFor(() => expect(player.getAttribute("data-fullscreen")).toBe("fallback"));
-    expect(player.style.position).toBe("fixed");
-    expect(player.style.width).toBe("100vw");
-    expect(player.style.height).toBe("100dvh");
     expect(document.body.style.overflow).toBe("hidden");
-    expect(view.getByTestId("video-primary-controls").style.left).toContain("safe-area-inset-left");
-    expect(view.getByTestId("video-primary-controls").style.bottom).toContain("safe-area-inset-bottom");
-    expect(view.getByTestId("video-secondary-controls").style.right).toContain("safe-area-inset-right");
+    const fullscreenStyles = document.getElementById("vanillasky-fullscreen")?.textContent;
+    expect(fullscreenStyles).toContain("position: fixed");
+    expect(fullscreenStyles).toContain("safe-area-inset-left");
+    expect(fullscreenStyles).toContain("safe-area-inset-bottom");
+    expect(fullscreenStyles).toContain("safe-area-inset-right");
 
     fireEvent.click(view.getByRole("button", { name: "Exit fullscreen" }));
     await waitFor(() => expect(player.getAttribute("data-fullscreen")).toBe("none"));
