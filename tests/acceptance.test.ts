@@ -4,7 +4,7 @@ import { createVideo, type VideoEvent } from "../src/internal";
 async function validEvents(): Promise<VideoEvent[]> {
   const run = createVideo({
     input: "Activation increased from 41% to 58%.",
-    opening: "Hi Joris — your update is ready.",
+    opening: "Your activation update is ready.",
     audio: { src: "https://customer.example/audio/calm.mp3" },
   }, {
     generate: async function* () {

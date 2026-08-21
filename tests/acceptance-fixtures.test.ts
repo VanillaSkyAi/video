@@ -22,7 +22,7 @@ describe("canonical acceptance fixtures", () => {
       expect(fixture.templateIds.length).toBeGreaterThanOrEqual(4);
     }
     expect(api.ACCEPTANCE_FIXTURES[1].input.personalization)
-      .toEqual(expect.objectContaining({ firstName: "Joris" }));
+      .toEqual(expect.objectContaining({ firstName: "Maya", role: "Product leader" }));
     expect(api.ACCEPTANCE_FIXTURES[3].input.suppliedMedia).toHaveLength(1);
     expect(api.ACCEPTANCE_FIXTURES[3].input.suppliedMedia?.[0]?.url)
       .not.toContain(".example");

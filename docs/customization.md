@@ -80,7 +80,7 @@ The opening is deterministic and should not wait for an LLM or remote media.
 Omit it to use `Creating your video...`, or supply one concise custom sentence:
 
 ```ts
-opening: "Joris, your Q2 recap is ready."
+opening: "Your Q2 customer impact recap is ready."
 ```
 
 Pass `opening: false` to omit the persisted opening and show application-owned

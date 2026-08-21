@@ -8,11 +8,11 @@
 import type { VideoInput } from "@vanillaskyai/video";
 
 const input: VideoInput = {
-  input: "Joris completed 142 customer conversations in Q2.",
+  input: "Maya completed 142 customer conversations in Q2.",
   knowledgeMode: "input-only",
   instructions: "Celebrate the result. Never alter a metric.",
-  opening: "Joris, your Q2 recap is ready.",
-  personalization: { firstName: "Joris", period: "Q2" },
+  opening: "Maya, your Q2 customer impact recap is ready.",
+  personalization: { firstName: "Maya", period: "Q2", role: "Product leader" },
   brand,
   suppliedMedia,
   audio: { src: "/audio/calm.mp3" },

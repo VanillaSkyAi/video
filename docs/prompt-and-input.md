@@ -160,7 +160,7 @@ video.generate({
     escalationsResolved: "96%",
     improvementsLaunched: 4,
   }),
-  personalization: { firstName: "Joris" },
+  personalization: { role: "Product leader", focus: "activation" },
 });
 ```
 
