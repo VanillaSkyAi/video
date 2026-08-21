@@ -11,7 +11,7 @@
  */
 
 import { interpolate, spring } from "../../motion";
-import { TOKEN_DEFAULTS } from "../../theme";
+import { MEDIA_TEXT_SHADOW, TOKEN_DEFAULTS } from "../../theme";
 
 // ─── Typed component (for direct use from templates) ────────────
 
@@ -136,9 +136,7 @@ export const CountUpNumber: React.FC<CountUpNumberProps> = ({
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
   );
 
-  const mediaTextShadow = hasMediaShadow
-    ? "0 2px 8px rgba(0,0,0,0.55), 0 6px 16px rgba(0,0,0,0.35)"
-    : undefined;
+  const mediaTextShadow = hasMediaShadow ? MEDIA_TEXT_SHADOW : undefined;
 
   const finalLabelFontSize = labelFontSize ?? 36 * s * 1.3;
 

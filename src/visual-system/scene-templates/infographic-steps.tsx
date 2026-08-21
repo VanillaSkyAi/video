@@ -18,7 +18,7 @@ import type { SceneTemplateProps } from "./types";
 import { resolveTokens } from "../theme";
 import { TemplateText } from "./template-text";
 import { StepsList } from "../primitives/infographic/StepsList";
-import { SceneBackground, getMediaBackgroundProps } from "./scene-background";
+import { SceneBackground, getMediaBackgroundProps, hasSceneMedia } from "./scene-background";
 
 export const InfographicStepsTemplate: React.FC<SceneTemplateProps> = ({
   variables,
@@ -72,6 +72,7 @@ export const InfographicStepsTemplate: React.FC<SceneTemplateProps> = ({
 
       {/* [slot: caption] Headline — top text area */}
       <TemplateText
+        overMedia={hasSceneMedia(variables)}
         motionProgress={motionProgress}
         typeTreatment={resolveTokens(style).preset.type}
         archetype="subtle"

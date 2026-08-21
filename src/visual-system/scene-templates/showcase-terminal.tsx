@@ -17,7 +17,7 @@ import type { SceneTemplateProps } from "./types";
 import { resolveTokens } from "../theme";
 import { TemplateText } from "./template-text";
 import { TerminalOutput } from "../primitives/devices/TerminalOutput";
-import { SceneBackground, getMediaBackgroundProps } from "./scene-background";
+import { SceneBackground, getMediaBackgroundProps, hasSceneMedia } from "./scene-background";
 
 export const ShowcaseTerminalTemplate: React.FC<SceneTemplateProps> = ({
   variables,
@@ -66,6 +66,7 @@ export const ShowcaseTerminalTemplate: React.FC<SceneTemplateProps> = ({
 
       {/* [slot: caption] */}
       <TemplateText
+        overMedia={hasSceneMedia(variables)}
         motionProgress={motionProgress}
         typeTreatment={resolveTokens(style).preset.type}
         archetype="subtle"

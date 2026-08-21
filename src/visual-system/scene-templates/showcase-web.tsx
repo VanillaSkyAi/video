@@ -13,7 +13,7 @@ import { TemplateText } from "./template-text";
 import type { TextArchetype } from "../typography";
 import { WebMockup } from "../primitives/devices/WebMockup";
 import { resolveProductSurfaceMotion } from "../primitives/devices/product-surface-config";
-import { SceneBackground, getMediaBackgroundProps } from "./scene-background";
+import { SceneBackground, getMediaBackgroundProps, hasSceneMedia } from "./scene-background";
 
 export const ShowcaseWebTemplate: React.FC<SceneTemplateProps> = ({
   variables,
@@ -71,6 +71,7 @@ export const ShowcaseWebTemplate: React.FC<SceneTemplateProps> = ({
 
       {/* [slot: caption] Shared top headline. */}
       <TemplateText
+        overMedia={hasSceneMedia(variables)}
         motionProgress={motionProgress}
         typeTreatment={tokens.preset.type}
         archetype={(textArchetype as TextArchetype) ?? "subtle"}

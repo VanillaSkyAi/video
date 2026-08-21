@@ -50,6 +50,7 @@ import {
   type TextArchetype,
   type ArchetypeRender,
 } from "../typography";
+import { MEDIA_TEXT_SHADOW } from "../theme";
 import type { TypeTreatment } from "../theme";
 import { renderWithEmoji, planTypewriterEmoji } from "../emoji/emoji-text";
 import { Emoji } from "../emoji";
@@ -91,6 +92,10 @@ export interface TemplateTextProps {
   color?: string;
   /** Beat intensity 0→1 (currently unused — kept for forward compat). */
   beatIntensity?: number;
+  /** True when this text renders over a photo or video backdrop. Swaps the
+   *  gradient-tuned hairline shadow for the media halo, which is what keeps
+   *  the scrim behind it light enough to leave the picture intact. */
+  overMedia?: boolean;
 }
 
 const DEFAULT_SAFE_ZONE: SafeZone = { top: 24, right: 24, bottom: 24, left: 24 };
@@ -136,8 +141,8 @@ const FONT_FEATURES = '"kern" 1, "liga" 1';
 // Drop shadow tuned to give crisp edges on retina without muddying text on
 // saturated gradients. Earlier two-layer shadow (1px tight + 16px wide) cast
 // dark halos that made gradient-backed text look smudged. A single barely-
-// there shadow is enough for edge definition; bg-media adds its own dark
-// scrim for legibility over photos, so we don't need to compensate here.
+// there shadow is enough for edge definition. Text over a photo or video
+// takes MEDIA_TEXT_SHADOW instead — see `overMedia`.
 function dropShadowFor(textColor: string): string {
   const dark = isLikelyDark(textColor);
   const tone = dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.2)";
@@ -311,6 +316,7 @@ export const TemplateText: React.FC<TemplateTextProps> = ({
   font = DEFAULT_FONT,
   color = "#FFFFFF",
   beatIntensity = 0,
+  overMedia = false,
 }) => {
   // Defensive coerce: TemplateText is downstream of ~16 templates that pass
   // their own `variables.X` strings. If any one of them passes undefined
@@ -384,7 +390,7 @@ export const TemplateText: React.FC<TemplateTextProps> = ({
     : baseTypo;
   const presetWeight = tt ? Math.min(900, Math.max(100, fontWeight + tt.weightDelta)) : fontWeight;
   const presetSize = tt ? fontSize * tt.sizeScale : fontSize;
-  const textShadow = dropShadowFor(color);
+  const textShadow = overMedia ? MEDIA_TEXT_SHADOW : dropShadowFor(color);
 
   const containerStyle: React.CSSProperties = {
     position: "absolute",

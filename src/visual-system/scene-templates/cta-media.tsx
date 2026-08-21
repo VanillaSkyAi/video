@@ -6,7 +6,7 @@ import { resolveTokens } from "../theme";
 import type { TextArchetype } from "../typography";
 import { TemplateText } from "./template-text";
 import { CtaMediaClose } from "../primitives/typography/CtaMediaClose";
-import { SceneBackground, getMediaBackgroundProps } from "./scene-background";
+import { SceneBackground, getMediaBackgroundProps, hasSceneMedia } from "./scene-background";
 
 export const CtaMediaTemplate: React.FC<SceneTemplateProps> = ({
   variables,
@@ -44,6 +44,7 @@ export const CtaMediaTemplate: React.FC<SceneTemplateProps> = ({
 
       {/* [slot: caption] */}
       <TemplateText
+        overMedia={hasSceneMedia(variables)}
         motionProgress={motionProgress}
         typeTreatment={resolveTokens(style).preset.type}
         archetype={(textArchetype as TextArchetype) || "subtle"}
