@@ -1,4 +1,6 @@
-import { createElement } from "react";
+// @vitest-environment jsdom
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
@@ -89,5 +91,60 @@ describe("media scrims", () => {
 
     const overGradient = render({ texts: "Legible", mediaType: "gradient" });
     expect(overGradient).not.toContain(MEDIA_TEXT_SHADOW);
+  });
+});
+
+describe("media that never paints", () => {
+  // React requires this flag before act(...) drives a concurrent root.
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+  it("drops the scrim when the photo fails to load, leaving a clean gradient", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    // jsdom does not fetch, so drive the probe's failure path directly.
+    const loaded: Array<{ fail: () => void }> = [];
+    const RealImage = globalThis.Image;
+    class ProbeImage {
+      onerror: (() => void) | null = null;
+      set src(_value: string) {
+        loaded.push({ fail: () => this.onerror?.() });
+      }
+    }
+    globalThis.Image = ProbeImage as unknown as typeof Image;
+
+    try {
+      await act(async () => {
+        root.render(
+          createElement(BgMediaTemplate, {
+            variables: { texts: "Autumn", mediaUrl: "https://cdn.test/missing.jpg" },
+            style,
+            progress: 0.5,
+            beatIntensity: 0,
+            width: 1080,
+            height: 1920,
+            safeZone: { top: 100, right: 60, bottom: 100, left: 60 },
+            sceneDuration: 4,
+            isPlaying: false,
+          }),
+        );
+      });
+
+      expect(container.querySelectorAll("[data-media-overlay]").length).toBeGreaterThan(0);
+
+      await act(async () => {
+        loaded.forEach((probe) => probe.fail());
+      });
+
+      // No scrim, no media layer — just the brand gradient the scene falls
+      // back to, identical to every other gradient-backed template.
+      expect(container.querySelectorAll("[data-media-overlay]").length).toBe(0);
+      expect(container.querySelectorAll("[data-media-position]").length).toBe(0);
+    } finally {
+      await act(async () => root.unmount());
+      globalThis.Image = RealImage;
+      container.remove();
+    }
   });
 });

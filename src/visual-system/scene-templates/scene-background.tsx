@@ -27,9 +27,10 @@
  *     the picture; together they do it at roughly half the darkening.
  *   - mediaType="gradient" deliberately ignores mediaUrl and renders only
  *     the brand gradient. First-class atmospheric mode.
- *   - When mediaUrl is empty / 404s / Pexels search returned nothing,
- *     gradient shows through cleanly (matches every other gradient-backed
- *     template).
+ *   - When mediaUrl is empty, 404s, is blocked, or Pexels search returned
+ *     nothing, the gradient shows through cleanly and no scrim is painted —
+ *     a scrim over a bare gradient is just a muddy gradient. Enforced, not
+ *     assumed: the media has to load before anything darkens for it.
  *
  * Extracted from bg-media.tsx so any template can compose it. bg-media
  * now uses this component too — its "media is the scene" identity comes
@@ -37,7 +38,7 @@
  * duplicated render logic.
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { TemplateStyle } from "../template-context";
 import { BrandGradientOverlay } from "../backgrounds";
 import { getBackgroundTransform } from "../backgrounds";
@@ -259,7 +260,35 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
   void _width;
   void _height;
   const resolved = resolveMediaType(mediaType, mediaUrl);
-  const showMedia = resolved !== "gradient" && !!mediaUrl;
+  const wantsMedia = resolved !== "gradient" && !!mediaUrl;
+
+  // A scrim exists to hold type against footage. When the footage never
+  // arrives — dead URL, blocked host, empty stock search — the scrim is left
+  // darkening the brand gradient it was never meant to touch, and the scene
+  // reads as a muddy, vignetted version of the gradient scenes next to it.
+  // So the media has to prove it painted before anything darkens for it.
+  //
+  // Optimistic default: static and export renders never run effects, so they
+  // keep today's output byte for byte. Only a browser that observes a real
+  // failure drops back to the clean gradient.
+  const [mediaFailed, setMediaFailed] = useState(false);
+  useEffect(() => {
+    setMediaFailed(false);
+    if (!wantsMedia || resolved !== "photo") return;
+    if (typeof Image === "undefined") return;
+    let cancelled = false;
+    const probe = new Image();
+    probe.onerror = () => {
+      if (!cancelled) setMediaFailed(true);
+    };
+    probe.src = mediaUrl;
+    return () => {
+      cancelled = true;
+      probe.onerror = null;
+    };
+  }, [mediaUrl, resolved, wantsMedia]);
+
+  const showMedia = wantsMedia && !mediaFailed;
   const resolvedPosition = resolveMediaPosition(mediaPosition);
   const resolvedTreatment = resolveMediaTreatment(mediaTreatment);
   const treatmentLayers = getMediaTreatmentLayers(resolvedTreatment, textAnchor);
@@ -357,6 +386,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
             // decode the first frame; "auto" kicks that work off the instant
             // the element mounts.
             preload="auto"
+            onError={() => setMediaFailed(true)}
             data-media-position={mediaPosition}
             style={{
               position: "absolute",
