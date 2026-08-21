@@ -87,6 +87,18 @@ function savedVideoState(video: Video): VideoState {
 }
 
 type PlayerIconName = "enter-fullscreen" | "exit-fullscreen" | "pause" | "play" | "replay" | "volume" | "volume-off";
+type FullscreenMode = "none" | "native" | "fallback";
+
+type WebkitFullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | void;
+  webkitCancelFullScreen?: () => Promise<void> | void;
+};
+
+type WebkitFullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+  webkitRequestFullScreen?: () => Promise<void> | void;
+};
 
 function PlayerIcon({ name, size = 22 }: { name: PlayerIconName; size?: number }): ReactElement {
   const shared = {
@@ -161,7 +173,10 @@ export function VideoPlayerRuntime({
   const autoStartGeneration = Boolean(playbackMode && stream && shouldAutoPlay && !reducedMotion);
   const [isPlaying, setIsPlaying] = useState(() => shouldAutoPlay && !reducedMotion && !autoStartGeneration);
   const [isMuted, setIsMuted] = useState(resolvedStartMuted);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenMode, setFullscreenMode] = useState<FullscreenMode>("none");
+  const [controlsHovered, setControlsHovered] = useState(false);
+  const [controlsFocused, setControlsFocused] = useState(false);
+  const [touchControlsVisible, setTouchControlsVisible] = useState(false);
   const [state, setState] = useState<VideoState>(() => video ? savedVideoState(video) : createVideoState());
   const [currentTime, setCurrentTime] = useState(0);
   const [activeStream, setActiveStream] = useState(stream);
@@ -170,10 +185,12 @@ export function VideoPlayerRuntime({
   const [introPlaying, setIntroPlaying] = useState(autoStartGeneration);
   const [generationIntroComplete, setGenerationIntroComplete] = useState(() => !playbackMode || !stream);
   const [observedWidth, setObservedWidth] = useState(0);
+  const [observedHeight, setObservedHeight] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef(state);
   const timeRef = useRef(currentTime);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const touchInputRef = useRef(false);
   const introStartedAtRef = useRef<number | null>(autoStartGeneration ? performance.now() : null);
   const callbacksRef = useRef({ onComplete, onError, onStateChange });
 
@@ -214,10 +231,40 @@ export function VideoPlayerRuntime({
   useEffect(() => setIsMuted(resolvedStartMuted), [resolvedStartMuted]);
 
   useEffect(() => {
-    const updateFullscreen = () => setIsFullscreen(document.fullscreenElement === containerRef.current);
+    if (!isPlaying || !controlsFocused) return;
+    const container = containerRef.current;
+    if (!container?.contains(document.activeElement)) setControlsFocused(false);
+  }, [controlsFocused, isPlaying]);
+
+  useEffect(() => {
+    const fullscreenDocument = document as WebkitFullscreenDocument;
+    const updateFullscreen = () => {
+      const fullscreenElement = document.fullscreenElement ?? fullscreenDocument.webkitFullscreenElement;
+      setFullscreenMode((current) => fullscreenElement === containerRef.current
+        ? "native"
+        : current === "native" ? "none" : current);
+    };
     document.addEventListener("fullscreenchange", updateFullscreen);
-    return () => document.removeEventListener("fullscreenchange", updateFullscreen);
+    document.addEventListener("webkitfullscreenchange", updateFullscreen);
+    return () => {
+      document.removeEventListener("fullscreenchange", updateFullscreen);
+      document.removeEventListener("webkitfullscreenchange", updateFullscreen);
+    };
   }, []);
+
+  useEffect(() => {
+    if (fullscreenMode !== "fallback") return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const exitOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFullscreenMode("none");
+    };
+    document.addEventListener("keydown", exitOnEscape);
+    return () => {
+      document.removeEventListener("keydown", exitOnEscape);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [fullscreenMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -280,16 +327,19 @@ export function VideoPlayerRuntime({
   }, [stream, video]);
 
   useEffect(() => {
-    if (width != null) return;
+    if (width != null && fullscreenMode === "none") return;
     const container = containerRef.current;
     if (!container) return;
-    const update = () => setObservedWidth(container.clientWidth);
+    const update = () => {
+      setObservedWidth(container.clientWidth);
+      setObservedHeight(container.clientHeight);
+    };
     update();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(update);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [width]);
+  }, [fullscreenMode, width]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -405,15 +455,28 @@ export function VideoPlayerRuntime({
   }, [startRequested, state.config?.audio?.volume, state.config?.scenes.length, state.status]);
 
   const streamOrientation = state.config?.orientation ?? "portrait";
-  const responsiveWidth = width ?? observedWidth;
+  const fullscreenActive = fullscreenMode !== "none";
+  const fullscreenWidth = fullscreenActive
+    ? observedWidth || (typeof window === "undefined" ? 0 : window.innerWidth)
+    : 0;
+  const fullscreenHeight = fullscreenActive
+    ? observedHeight || (typeof window === "undefined" ? 0 : window.innerHeight)
+    : 0;
+  const responsiveWidth = fullscreenActive ? fullscreenWidth : width ?? observedWidth;
   const orientation = orientationOverride === "auto"
     ? responsiveWidth > 0
       ? responsiveWidth <= responsiveBreakpoint ? "portrait" : "landscape"
       : streamOrientation
     : orientationOverride ?? streamOrientation;
   const dimensions = getDimensions(orientation);
-  const displayWidth = (width ?? observedWidth) || dimensions.width;
+  const naturalDisplayWidth = (width ?? observedWidth) || dimensions.width;
+  const displayWidth = fullscreenActive
+    ? Math.min(fullscreenWidth, fullscreenHeight * dimensions.width / dimensions.height)
+    : naturalDisplayWidth;
   const displayHeight = displayWidth * dimensions.height / dimensions.width;
+  const playerHeight = fullscreenActive ? fullscreenHeight : displayHeight;
+  const frameLeft = fullscreenActive ? (fullscreenWidth - displayWidth) / 2 : 0;
+  const frameTop = fullscreenActive ? (playerHeight - displayHeight) / 2 : 0;
   const scale = displayWidth / dimensions.width;
   const config = state.config;
   const displayConfig = config && config.orientation !== orientation
@@ -434,6 +497,18 @@ export function VideoPlayerRuntime({
     : currentTime;
   const startPlayback = () => {
     setGenerationIntroComplete(true);
+    let activeFocusIsVisible = controlsFocused;
+    try {
+      activeFocusIsVisible = (document.activeElement as Element | null)?.matches(":focus-visible") ?? false;
+    } catch {
+      // Preserve the tracked keyboard-focus state on older browsers.
+    }
+    setControlsFocused(Boolean(
+      !touchInputRef.current
+        && activeFocusIsVisible
+        && containerRef.current?.contains(document.activeElement),
+    ));
+    setTouchControlsVisible(false);
     const audio = audioRef.current;
     if (audio) {
       void audio.play()
@@ -492,11 +567,58 @@ export function VideoPlayerRuntime({
   const toggleFullscreen = async () => {
     const container = containerRef.current;
     if (!container) return;
-    if (document.fullscreenElement === container) await document.exitFullscreen?.();
-    else await container.requestFullscreen?.();
+    if (fullscreenMode === "fallback") {
+      setFullscreenMode("none");
+      return;
+    }
+
+    const fullscreenDocument = document as WebkitFullscreenDocument;
+    const standardFullscreenElement = document.fullscreenElement;
+    const webkitFullscreenElement = fullscreenDocument.webkitFullscreenElement;
+    const fullscreenElement = standardFullscreenElement ?? webkitFullscreenElement;
+    if (fullscreenElement === container) {
+      const exitFullscreen = standardFullscreenElement === container
+        ? document.exitFullscreen
+          ?? fullscreenDocument.webkitExitFullscreen
+          ?? fullscreenDocument.webkitCancelFullScreen
+        : fullscreenDocument.webkitExitFullscreen
+          ?? fullscreenDocument.webkitCancelFullScreen
+          ?? document.exitFullscreen;
+      try {
+        await exitFullscreen?.call(document);
+      } catch {
+        setFullscreenMode("none");
+      }
+      return;
+    }
+
+    const fullscreenContainer = container as WebkitFullscreenElement;
+    const requestFullscreen = container.requestFullscreen
+      ?? fullscreenContainer.webkitRequestFullscreen
+      ?? fullscreenContainer.webkitRequestFullScreen;
+    if (!requestFullscreen) {
+      setFullscreenMode("fallback");
+      return;
+    }
+    try {
+      await requestFullscreen.call(container);
+    } catch {
+      setFullscreenMode("fallback");
+    }
   };
+  const isFullscreen = fullscreenMode !== "none";
+  const controlsVisible = !isPlaying || controlsHovered || controlsFocused || touchControlsVisible;
   const controlSize = Math.max(40, Math.min(52, Math.round(displayWidth * 0.15)));
   const controlInset = Math.max(10, Math.min(20, Math.round(displayWidth * 0.056)));
+  const controlBottom = fullscreenMode === "fallback"
+    ? `calc(${controlInset}px + env(safe-area-inset-bottom, 0px))`
+    : controlInset;
+  const controlLeft = fullscreenMode === "fallback"
+    ? `calc(${controlInset}px + env(safe-area-inset-left, 0px))`
+    : controlInset;
+  const controlRight = fullscreenMode === "fallback"
+    ? `calc(${controlInset}px + env(safe-area-inset-right, 0px))`
+    : controlInset;
   const controlButtonStyle: CSSProperties = {
     display: "inline-grid",
     placeItems: "center",
@@ -552,9 +674,41 @@ export function VideoPlayerRuntime({
       aria-label={ariaLabel}
       tabIndex={0}
       onKeyDown={(event) => {
+        touchInputRef.current = false;
+        setControlsFocused(true);
         if (event.target === event.currentTarget && (event.key === " " || event.key === "Enter")) {
           event.preventDefault();
           togglePlayback();
+        }
+      }}
+      onPointerEnter={(event) => {
+        if (event.pointerType !== "touch" && !touchInputRef.current) setControlsHovered(true);
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType !== "touch") {
+          touchInputRef.current = false;
+          setControlsHovered(false);
+        }
+      }}
+      onFocusCapture={(event) => {
+        let focusVisible = true;
+        try {
+          focusVisible = (event.target as Element).matches(":focus-visible");
+        } catch {
+          // Older browsers without :focus-visible still receive an accessible
+          // focused-control treatment.
+        }
+        setControlsFocused(focusVisible && !touchInputRef.current);
+      }}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setControlsFocused(false);
+      }}
+      onTouchStart={(event) => {
+        touchInputRef.current = true;
+        setControlsHovered(false);
+        setControlsFocused(false);
+        if (!(event.target as Element).closest("button")) {
+          setTouchControlsVisible((visible) => !visible);
         }
       }}
       data-testid="video-player"
@@ -571,14 +725,26 @@ export function VideoPlayerRuntime({
       data-generation-intro-complete={generationIntroComplete}
       data-audio-unlocked={audioUnlocked}
       data-playback-mode={playbackMode ?? "custom"}
+      data-fullscreen={fullscreenMode}
       className={className}
       style={{
         width: width ?? "100%",
-        height: displayHeight,
+        height: playerHeight,
         position: "relative",
         overflow: "hidden",
         background: "#090712",
         ...style,
+        ...(fullscreenActive ? {
+          width: "100vw",
+          height: "100dvh",
+          border: "none",
+          borderRadius: 0,
+        } : {}),
+        ...(fullscreenMode === "fallback" ? {
+          position: "fixed",
+          inset: 0,
+          zIndex: 2_147_483_647,
+        } : {}),
       }}
     >
       {generationCoverVisible ? (
@@ -629,7 +795,8 @@ export function VideoPlayerRuntime({
           playing={isPlaying}
           style={{
             position: "absolute",
-            inset: 0,
+            left: frameLeft,
+            top: frameTop,
             transform: `scale(${scale})`,
             transformOrigin: "top left",
           }}
@@ -694,11 +861,13 @@ export function VideoPlayerRuntime({
           inset: 0,
           zIndex: 4,
           pointerEvents: "none",
+          opacity: controlsVisible ? 1 : 0,
+          transition: "opacity 160ms ease",
         }}
       >
         <div
           data-testid="video-primary-controls"
-          style={{ position: "absolute", left: controlInset, bottom: controlInset, display: "flex", pointerEvents: "auto" }}
+          style={{ position: "absolute", left: controlLeft, bottom: controlBottom, display: "flex", pointerEvents: controlsVisible ? "auto" : "none" }}
         >
           <button
             type="button"
@@ -711,7 +880,7 @@ export function VideoPlayerRuntime({
         </div>
         <div
           data-testid="video-secondary-controls"
-          style={{ position: "absolute", right: controlInset, bottom: controlInset, display: "flex", gap: 10, pointerEvents: "auto" }}
+          style={{ position: "absolute", right: controlRight, bottom: controlBottom, display: "flex", gap: 10, pointerEvents: controlsVisible ? "auto" : "none" }}
         >
           {config?.audio ? (
             <button

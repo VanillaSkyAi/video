@@ -4,6 +4,11 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
+- Hides playback controls while a video is playing until the viewer hovers,
+  focuses, or taps the player, and keeps paused and completed controls visible.
+- Makes fullscreen usable on mobile browsers through prefixed fullscreen APIs
+  and a viewport-filling fallback when native fullscreen is unavailable.
+
 - Rebuilds text legibility over photo and video backdrops. Scrims now ramp off
   an eased curve instead of a two-stop linear fade, so they no longer leave a
   visible band across the frame, and they are shaped to where each template's
