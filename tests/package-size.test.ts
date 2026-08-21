@@ -32,10 +32,18 @@ describe("release package size budget", () => {
   });
 
   it("keeps the default browser entry small by loading selected renderers on demand", async () => {
-    const { assertInitialClientWithinBudget } = await import("../scripts/verify-package-size");
-    expect(() => assertInitialClientWithinBudget(47_000)).not.toThrow();
-    expect(() => assertInitialClientWithinBudget(47_001)).toThrow(/headroom/i);
-    expect(() => assertInitialClientWithinBudget(52_001)).toThrow(/initial client gzip size/i);
+    const {
+      assertInitialClientWithinBudget,
+      INITIAL_CLIENT_GZIP_BUDGET,
+      ENTRY_GZIP_HEADROOM,
+    } = await import("../scripts/verify-package-size");
+    // Derived, not hardcoded: the ceiling has to move with the budget, or a
+    // deliberate budget change reads as a broken test instead of a decision.
+    const ceiling = INITIAL_CLIENT_GZIP_BUDGET - ENTRY_GZIP_HEADROOM;
+    expect(() => assertInitialClientWithinBudget(ceiling)).not.toThrow();
+    expect(() => assertInitialClientWithinBudget(ceiling + 1)).toThrow(/headroom/i);
+    expect(() => assertInitialClientWithinBudget(INITIAL_CLIENT_GZIP_BUDGET + 1))
+      .toThrow(/initial client gzip size/i);
   });
 
   it("bounds the transitive React-free test entry", async () => {

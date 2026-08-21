@@ -4,6 +4,15 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
+- Holds a media scene's scrim back until the backdrop actually paints, so a
+  photo or video that is still loading shows the clean brand gradient instead
+  of a gradient wearing an overlay meant for footage. The scrim and the
+  picture now arrive on the same frame.
+- Preloads scene backdrops as soon as their URL is known — including the
+  `asset.patch` that carries a resolved stock lookup — so the loading window
+  is usually gone before the scene plays. Video posters are warmed; video
+  streams deliberately are not.
+
 - Hides playback controls while a video is playing until the viewer hovers,
   focuses, or taps the player, and keeps paused and completed controls visible.
 - Makes fullscreen usable on mobile browsers through prefixed fullscreen APIs

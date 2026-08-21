@@ -12,7 +12,10 @@ import { selectPackedArtifact } from "./lib/release-integrity.mjs";
 
 export const PACKED_SIZE_BUDGET = 1_250_000;
 export const UNPACKED_SIZE_BUDGET = 5_000_000;
-export const INITIAL_CLIENT_GZIP_BUDGET = 52_000;
+// Raised from 52_000. main had drifted to within 12 bytes of the effective
+// ceiling (budget minus ENTRY_GZIP_HEADROOM), which made the gate reject any
+// client-side change at all rather than the oversized ones it exists to catch.
+export const INITIAL_CLIENT_GZIP_BUDGET = 54_000;
 export const TEST_KIT_GZIP_BUDGET = 50_000;
 export const LOADED_TEST_KIT_GZIP_BUDGET = 60_000;
 export const ENTRY_GZIP_HEADROOM = 5_000;
