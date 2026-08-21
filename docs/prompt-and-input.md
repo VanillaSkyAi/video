@@ -121,7 +121,8 @@ streamText: ({ systemPrompt, userPrompt, signal }) => streamText({
 `userPrompt` is assembled by VanillaSky from:
 
 - orientation and maximum duration;
-- whether an opening scene already exists;
+- whether a deterministic opening scene already exists or the host is waiting
+  for the first generated scene;
 - raw `input`;
 - creative `instructions`;
 - personalization;

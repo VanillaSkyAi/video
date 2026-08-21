@@ -81,7 +81,11 @@ Use `playbackMode="manual"` to require the button on every run,
 `playbackMode="muted-autoplay"` for browser-safe muted autoplay, or
 `playbackMode="autoplay-with-sound"` to try audible autoplay immediately. The
 lower-level `autoPlay` and `startMuted` props remain available when no playback
-mode is set.
+mode is set. For a chat response that should try audible autoplay without the
+SDK generation intro, pass `opening: false`, wait to mount the player until a
+generated scene exists, and render it with `autoPlay` and `startMuted={false}`.
+If the browser blocks the audible start, the player returns to the first frame
+and exposes its sound-start control.
 
 ## Media providers
 

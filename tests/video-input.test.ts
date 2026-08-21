@@ -67,6 +67,45 @@ describe("VideoInput", () => {
     );
   });
 
+  it("lets the host replace the deterministic opening with application loading UI", async () => {
+    const { buildVideoUserPrompt, createVideo } = await import("../src/internal");
+    const response = createVideo({
+      input: "Activation increased to 58%.",
+      opening: false,
+      maxDurationSec: 12,
+    }, {
+      capabilities: { templates: ["bigNumber"] },
+      generate: async function* () {
+        yield {
+          type: "scene.add" as const,
+          scene: {
+            id: "activation",
+            templateId: "bigNumber",
+            variables: { texts: "Activation", value: 58, label: "percent" },
+            timing: { fixedDuration: 3 },
+          },
+        };
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    expect(response.request.input.opening).toBe(false);
+    expect(response.initialConfig.scenes).toEqual([]);
+    expect(buildVideoUserPrompt(response.request.input)).toContain(
+      "Add the first grounded scene as soon as it is complete",
+    );
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.filter((event) => event.type === "scene.add").map((event) =>
+      event.type === "scene.add" ? event.data.scene.id : undefined
+    )).toEqual(["activation"]);
+    expect(events[0]).toMatchObject({
+      type: "response.start",
+      data: { capabilities: { templates: ["bigNumber"] } },
+    });
+  });
+
   it("turns an intent-level opening into the deterministic opening scene", async () => {
     const { buildVideoUserPrompt, createVideo } = await import("../src/internal");
     const response = createVideo({
@@ -447,6 +486,11 @@ describe("VideoInput", () => {
     }, { requestId: "request-1" });
 
     expect(parseVideoRequest(valid)).toEqual(valid);
+    const loadingOnly = createVideoRequest({
+      input: "Grounded source.",
+      opening: false,
+    }, { requestId: "request-loading-only" });
+    expect(parseVideoRequest(loadingOnly)).toEqual(loadingOnly);
     expect(() => parseVideoRequest({
       ...valid,
       input: { input: "Grounded source.", knowledgeMode: "outside-web" },
@@ -550,7 +594,7 @@ describe("VideoInput", () => {
 
   it("has the small intent-level type surface", () => {
     expectTypeOf<VideoInput["knowledgeMode"]>().toEqualTypeOf<"input-only" | "general" | undefined>();
-    expectTypeOf<VideoInput["opening"]>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<VideoInput["opening"]>().toEqualTypeOf<string | false | undefined>();
     expectTypeOf<VideoInput["audio"]>().toEqualTypeOf<false | { src: string } | undefined>();
     expectTypeOf<VideoBackground>().toEqualTypeOf<
       | { type: "solid"; color: string }

@@ -581,6 +581,27 @@ describe("video response core", () => {
     });
   });
 
+  it("fails instead of completing an empty video when the host disables the opening", async () => {
+    const { createVideo } = await import("../src/internal");
+    const response = createVideo({
+      input: "A grounded answer is required.",
+      opening: false,
+    }, {
+      generate: async function* () {
+        yield { type: "plan.complete" as const };
+      },
+    });
+
+    const events = [];
+    for await (const event of response.stream) events.push(event);
+    expect(events.map(({ type }) => type)).toEqual(["response.start", "response.error"]);
+    expect(events.at(-1)).toMatchObject({
+      type: "response.error",
+      data: { terminal: true, error: { code: "generation_failed" } },
+    });
+    await expect(response.result).resolves.toMatchObject({ status: "error" });
+  });
+
   it("allocates or omits content-heavy scenes deterministically through the protocol", async () => {
     const { createVideo } = await import("../src/internal");
     const cases = [

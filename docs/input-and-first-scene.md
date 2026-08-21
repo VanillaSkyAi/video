@@ -48,5 +48,17 @@ optional custom copy. That copy should:
 - be one concise sentence that fits comfortably in both supported orientations;
 - be part of the final story, not a spinner disguised as a scene.
 
-The opening is runtime-owned, so it remains available even when `templateIds`
+Pass `opening: false` when the application should own the waiting experience:
+
+```ts
+opening: false
+```
+
+The SDK then starts with an empty timeline and emits the first validated,
+generated scene as soon as it is ready. Render a transient loading state in the
+host application until `video.video?.scenes.length` is non-zero. That loading
+state is not persisted in the event stream or completed video. A generated
+scene is still required; a planner that completes without one fails the run.
+
+The deterministic opening is runtime-owned, so it remains available even when `templateIds`
 does not let the planner select `media` for generated body scenes.

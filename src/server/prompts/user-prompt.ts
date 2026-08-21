@@ -64,7 +64,7 @@ export function buildVideoUserPrompt(input: VideoInput, openingDurationSec = 0):
     "Compose a video response from the structured customer input below.",
     `Knowledge mode: ${input.knowledgeMode ?? "input-only"}.`,
     `Maximum duration: ${input.maxDurationSec ?? 30} seconds, including the supplied opening.`,
-    input.opening?.trim()
+    typeof input.opening === "string" && input.opening.trim()
       ? `The host has already added the opening scene, which consumes ${openingDurationSec} seconds. Continue after it and do not repeat or rewrite it.`
       : "Add the first grounded scene as soon as it is complete.",
     "The first generated body scene must be fully playable without external media. Use a content-fit text, data, comparison, list, or device-free template with no media URL or keyword.",
