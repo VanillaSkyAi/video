@@ -1,38 +1,70 @@
 /**
- * Warms a scene's backdrop bytes before the scene is on screen.
+ * Warms a scene's backdrop before the scene is on screen.
  *
- * SceneBackground holds its scrim back until the media actually paints, so a
- * cold backdrop degrades to a clean brand gradient rather than a muddy one.
- * That is the safety net. This is the part that keeps the net from being
- * needed: by the time the scene mounts the image is usually in the browser
- * cache, decodes synchronously, and the first frame is already the picture.
- *
- * Videos are deliberately not fetched here. Their poster is, which is what
- * paints the first frame; pre-mounting or pre-buffering video streams is the
- * recipe that leaks decoder buffers on iOS Safari (see SceneBackground's
- * unmount cleanup for the same hazard).
+ * SceneBackground holds its scrim back until the backdrop actually paints, so
+ * a cold backdrop degrades to a clean brand gradient rather than a muddy one.
+ * That is the safety net. This is what keeps the net from being needed: by the
+ * time the scene mounts the bytes are in the browser cache, and the first
+ * frame is already the picture instead of a gradient that flashes and pops.
  */
 import { resolveMediaType } from "../visual-system/scene-templates/media-source.js";
 
 /** URLs already warmed this session. Preloading twice costs a request. */
 const warmed = new Set<string>();
 
-function warm(url: string): void {
+/**
+ * In-flight warms, held so the browser cannot collect them mid-request.
+ * A detached Image or HTMLVideoElement with no reference is eligible for
+ * garbage collection, and browsers are free to cancel its load when that
+ * happens — which is how a preloader ends up doing nothing at all.
+ */
+const inFlight = new Set<HTMLImageElement | HTMLVideoElement>();
+
+function warmImage(url: string): void {
   const trimmed = url.trim();
   if (!trimmed || warmed.has(trimmed)) return;
   warmed.add(trimmed);
   const image = new Image();
-  // Failures are the scene's problem, not the preloader's — it falls back to
-  // the gradient on its own. Swallow here so an unhandled error never
-  // surfaces from a background warm.
-  image.onerror = () => {};
+  const release = () => inFlight.delete(image);
+  image.onload = release;
+  image.onerror = release;
+  inFlight.add(image);
   image.src = trimmed;
 }
 
 /**
- * Preload whatever will paint this scene's backdrop first. Safe to call for
- * every scene, repeatedly, and on any template: scenes without media do
- * nothing.
+ * Only one video is fetched at a time, and its element is torn down the moment
+ * the first frame is available. Holding several decoders open is what exhausts
+ * iOS Safari's media memory — the same hazard SceneBackground guards against
+ * when it unmounts. One warm element, released immediately, keeps the bytes
+ * without keeping the decoder.
+ */
+let videoWarmInFlight = false;
+
+function warmVideo(url: string): void {
+  const trimmed = url.trim();
+  if (!trimmed || warmed.has(trimmed) || videoWarmInFlight) return;
+  warmed.add(trimmed);
+  videoWarmInFlight = true;
+  const video = document.createElement("video");
+  video.preload = "auto";
+  video.muted = true;
+  video.playsInline = true;
+  const release = () => {
+    videoWarmInFlight = false;
+    inFlight.delete(video);
+    video.removeAttribute("src");
+    video.load();
+  };
+  video.onloadeddata = release;
+  video.onerror = release;
+  inFlight.add(video);
+  video.src = trimmed;
+}
+
+/**
+ * Preload whatever paints this scene's backdrop. Safe to call for every scene,
+ * repeatedly, and on any template: scenes without media do nothing.
  */
 export function preloadSceneMedia(variables: Record<string, unknown>): void {
   if (typeof window === "undefined" || typeof Image === "undefined") return;
@@ -44,8 +76,11 @@ export function preloadSceneMedia(variables: Record<string, unknown>): void {
   if (resolved === "gradient") return;
 
   if (resolved === "video") {
-    warm(String(variables.mediaPoster || ""));
+    // The poster is what paints the first frame, so it comes first and is
+    // never blocked behind the stream warm.
+    warmImage(String(variables.mediaPoster || ""));
+    warmVideo(mediaUrl);
     return;
   }
-  warm(mediaUrl);
+  warmImage(mediaUrl);
 }

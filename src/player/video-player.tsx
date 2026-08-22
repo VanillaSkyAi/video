@@ -188,8 +188,24 @@ export function VideoPlayerRuntime({
       ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Context) return;
     const context = new Context();
-    context.resume().catch(Boolean);
-    import("./control-visibility.js").then((output) => output.default(audio, context)).catch(() => context.close());
+    // Resume inside the gesture that triggered this. iOS only unlocks audio
+    // synchronously from a user gesture, and everything after the dynamic
+    // import below runs too late to count as one.
+    const unlocked = context.resume().catch(Boolean);
+    void import("./control-visibility.js")
+      .then(async (output) => {
+        await unlocked;
+        // Routing an element through a context that is not running silences
+        // it outright: its audio stops going to the speakers and starts
+        // going into a stalled graph. Playing directly is the safe answer —
+        // the volume ramp is worth less than audible sound.
+        if (context.state !== "running") {
+          void context.close();
+          return;
+        }
+        output.default(audio, context);
+      })
+      .catch(() => context.close());
   };
 
   if (stream !== activeStream) {

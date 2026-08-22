@@ -850,17 +850,23 @@ describe("VideoPlayer", () => {
     const sourceConnect = vi.fn();
     const gainConnect = vi.fn();
     const disconnect = vi.fn();
-    const resume = vi.fn().mockResolvedValue(undefined);
     const close = vi.fn().mockResolvedValue(undefined);
     const createMediaElementSource = vi.fn(() => ({ connect: sourceConnect, disconnect }));
     const createGain = vi.fn(() => ({ gain, connect: gainConnect, disconnect }));
+    // A real context starts suspended and reports "running" once resume()
+    // settles. The player refuses to route audio through one that never gets
+    // there, because that silences the element instead of fading it.
+    const resume = vi.fn();
     class FakeAudioContext {
       readonly destination = {};
-      readonly state = "suspended";
+      state = "suspended";
       readonly createMediaElementSource = createMediaElementSource;
       readonly createGain = createGain;
-      readonly resume = resume;
       readonly close = close;
+      readonly resume = async (): Promise<void> => {
+        resume();
+        this.state = "running";
+      };
     }
     vi.stubGlobal("AudioContext", FakeAudioContext);
 
@@ -939,6 +945,51 @@ describe("VideoPlayer", () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
+  it("leaves audio on the element when the audio context never starts running", async () => {
+    // iOS unlocks Web Audio only from a user gesture. Routing an element into
+    // a context that stayed suspended does not fade it — it silences it, and
+    // silence is a worse failure than an unfaded soundtrack.
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "volume", "get").mockReturnValue(1);
+    vi.spyOn(HTMLMediaElement.prototype, "volume", "set").mockImplementation(() => undefined);
+    const close = vi.fn().mockResolvedValue(undefined);
+    const createMediaElementSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }));
+    class StuckAudioContext {
+      readonly destination = {};
+      readonly state = "suspended";
+      readonly close = close;
+      readonly createMediaElementSource = createMediaElementSource;
+      readonly createGain = vi.fn(() => ({ gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() }));
+      readonly resume = vi.fn().mockResolvedValue(undefined);
+    }
+    vi.stubGlobal("AudioContext", StuckAudioContext);
+
+    const { VideoPlayer } = await import("../src/player/video-player");
+    const video: Video = {
+      schemaVersion: "0.1",
+      orientation: "portrait",
+      audio: {
+        trackId: "soundtrack",
+        audioUrl: "data:audio/wav;base64,UklGRg==",
+        duration: 4,
+        volume: 0.2,
+        fadeOutMs: 1_000,
+        beatDetection: { sensitivity: 0.5 },
+        beatMarkers: [],
+      },
+      style: TEST_VIDEO_STYLE,
+      scenes: [{ id: "a", templateId: "brandMessage", variables: { texts: "Hi" }, timing: { fixedDuration: 2 } }],
+    };
+    const view = render(createElement(VideoPlayer, { video, autoPlay: false, startMuted: false }));
+    await waitFor(() => expect(document.getElementById("vanillasky-player-control-visibility")).not.toBeNull());
+    fireEvent.click(view.getByRole("button", { name: "Play video with sound" }));
+
+    await waitFor(() => expect(close).toHaveBeenCalled());
+    // Never rewired, so the element keeps playing straight to the speakers.
+    expect(createMediaElementSource).not.toHaveBeenCalled();
+  });
+
   it("keeps cross-origin soundtracks on the media element when volume control is unavailable", async () => {
     const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
@@ -949,10 +1000,13 @@ describe("VideoPlayer", () => {
     const createMediaElementSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }));
     class FakeAudioContext {
       readonly destination = {};
-      readonly resume = vi.fn().mockResolvedValue(undefined);
+      state = "suspended";
       readonly close = close;
       readonly createMediaElementSource = createMediaElementSource;
       readonly createGain = vi.fn(() => ({ gain, connect: vi.fn(), disconnect: vi.fn() }));
+      readonly resume = async (): Promise<void> => {
+        this.state = "running";
+      };
     }
     vi.stubGlobal("AudioContext", FakeAudioContext);
 
