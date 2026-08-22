@@ -25,8 +25,20 @@ On a branch off current `main`:
    and fails if it is missing or empty.
 2. Set the version in `package.json`, then run `npm install --package-lock-only`
    to match `package-lock.json`.
-3. Update the version references in `README.md` and the `@vanillaskyai/video`
-   pin in each `examples/*/package.json`.
+3. Update every pinned version reference. Tests assert these, so a bump that
+   misses one fails CI rather than shipping a stale pin:
+   - `README.md` (badge, install command, and the `v X.Y.Z` example tree URL)
+   - the `@vanillaskyai/video` pin in each `examples/*/package.json`
+   - `docs/getting-started.md` and `docs/integrate-nextjs.md` (install command
+     and example tree URL)
+   - `skills/vanillasky/SKILL.md` (install command)
+
+   Searching for the version you are replacing should return nothing outside
+   `CHANGELOG.md`, which keeps its history:
+
+   ```bash
+   grep -rn "$PREVIOUS_VERSION" --exclude-dir=node_modules --exclude-dir=.git .
+   ```
 
 Open a pull request and merge it once CI is green, like any other change.
 
