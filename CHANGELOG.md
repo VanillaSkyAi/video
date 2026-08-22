@@ -4,6 +4,14 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
+- Mounts a scene that brings a new photo or video 1.2s before it appears,
+  instead of 0.3s, so the element has time to decode and the scene arrives
+  showing its picture rather than a gradient that pops a beat later. The extra
+  time is invisible: the layer stays fully transparent until the existing
+  0.3s cross-fade begins, so every rendered frame is unchanged, and the mounted
+  element is handed to the incoming scene rather than rebuilt. Scenes that
+  reuse the backdrop already on screen are unaffected.
+
 ## 0.3.3
 
 - Keeps a soundtrack audible on iPhone Safari when its audio context cannot be

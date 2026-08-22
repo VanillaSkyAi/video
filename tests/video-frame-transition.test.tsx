@@ -103,13 +103,63 @@ describe("VideoFrame transition ownership", () => {
     expect(mounted).toHaveBeenCalledTimes(1);
     expect(unmounted).not.toHaveBeenCalled();
 
-    view.rerender(createElement(VideoFrame, { ...props, time: 4.6 }));
+    // Scrub back out of the window entirely. It opens at the preroll, 1.2s
+    // before the cut, not at the 0.3s blend.
+    view.rerender(createElement(VideoFrame, { ...props, time: 3 }));
     expect(view.container.querySelector('[data-scene-layer="active"]')?.getAttribute("data-layer-scene-id")).toBe("opening-scene");
     expect(unmounted).toHaveBeenCalledTimes(1);
 
     view.rerender(createElement(VideoFrame, { ...props, time: 12 }));
     expect(view.container.querySelector('[data-scene-layer="active"]')?.getAttribute("data-layer-scene-id")).toBe("incoming-scene");
     expect(mounted).toHaveBeenCalledTimes(2);
+  });
+
+  it("mounts a backdrop scene early and invisibly so its media can decode before the cut", () => {
+    const opening = defineTemplate({
+      id: "opening",
+      usesGlobalTransition: true,
+      transitionTiming: { entryReadyProgress: 0.2, holdProgress: 0.7 },
+      schema: { type: "object", properties: {}, additionalProperties: false },
+      component: () => createElement("div", null, "Opening"),
+    });
+    const incoming = defineTemplate({
+      id: "incoming",
+      usesGlobalTransition: true,
+      transitionTiming: { entryReadyProgress: 0.2, holdProgress: 0.7 },
+      schema: { type: "object", properties: {}, additionalProperties: false },
+      component: () => createElement("video", { src: "incoming.mp4" }),
+    });
+    const kit = createRenderTemplateRegistry({ templates: [opening, incoming] });
+    const config: Video = {
+      schemaVersion: "0.1",
+      orientation: "portrait",
+      style: { ...TEST_VIDEO_STYLE, defaultTransition: "crossfade" },
+      scenes: [
+        { id: "opening-scene", templateId: "opening", variables: { mediaUrl: "opening.jpg" }, timing: { fixedDuration: 5 } },
+        { id: "incoming-scene", templateId: "incoming", variables: { mediaUrl: "incoming.mp4" }, timing: { fixedDuration: 6 } },
+      ],
+    };
+    const props = { kit, config, width: 540, height: 960 };
+    const view = render(createElement(VideoFrame, { ...props, time: 3 }));
+    expect(view.container.querySelector('[data-scene-layer="incoming"]')).toBeNull();
+
+    // Inside the preroll, outside the blend: the element exists and can start
+    // decoding, while the frame on screen is untouched.
+    view.rerender(createElement(VideoFrame, { ...props, time: 4.2 }));
+    const early = view.container.querySelector<HTMLElement>('[data-scene-layer="incoming"]');
+    expect(early).not.toBeNull();
+    expect(early?.querySelector("video")).not.toBeNull();
+    expect(early?.style.opacity).toBe("0");
+    // The scene on screen is still the active one, not a fading outgoing one.
+    const showing = view.container.querySelector<HTMLElement>('[data-scene-layer="active"]');
+    expect(showing?.getAttribute("data-layer-scene-id")).toBe("opening-scene");
+    expect(showing?.style.opacity).toBe("1");
+    expect(showing?.style.pointerEvents).toBe("auto");
+
+    // Once the blend opens the pair behaves exactly as before.
+    view.rerender(createElement(VideoFrame, { ...props, time: 4.85 }));
+    expect(view.container.querySelector('[data-scene-layer="outgoing"]')).not.toBeNull();
+    expect(Number(view.container.querySelector<HTMLElement>('[data-scene-layer="incoming"]')?.style.opacity)).toBeGreaterThan(0);
   });
 
   it("preserves a suspense-resolved media node from incoming transition through settlement", async () => {
@@ -158,7 +208,7 @@ describe("VideoFrame transition ownership", () => {
     expect(mounted).toHaveBeenCalledTimes(1);
     expect(unmounted).not.toHaveBeenCalled();
 
-    view.rerender(createElement(VideoFrame, { ...props, time: 4.6 }));
+    view.rerender(createElement(VideoFrame, { ...props, time: 3 }));
     expect(unmounted).toHaveBeenCalledTimes(1);
   });
 });
