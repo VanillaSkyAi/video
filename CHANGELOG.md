@@ -4,6 +4,8 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
+## 0.3.4
+
 - Mounts a scene that brings a new photo or video 1.2s before it appears,
   instead of 0.3s, so the element has time to decode and the scene arrives
   showing its picture rather than a gradient that pops a beat later. The extra

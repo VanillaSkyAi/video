@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.42",
-    "@vanillaskyai/video": "0.3.3",
+    "@vanillaskyai/video": "0.3.4",
     "ai": "^7.0.66",
     "openai": "^7.4.0"
   },

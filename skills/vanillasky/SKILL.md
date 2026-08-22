@@ -13,7 +13,7 @@ documentation.
 1. Install the SDK and one model provider:
 
    ```bash
-   npm install @vanillaskyai/video@0.3.3 ai @ai-sdk/openai
+   npm install @vanillaskyai/video@0.3.4 ai @ai-sdk/openai
    ```
 
 2. Add the provider key to an ignored `.env.local`. If it is missing, ask the
