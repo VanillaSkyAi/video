@@ -11,6 +11,24 @@ import { getTemplateDefaults } from "../visual-system/catalog/schema.js";
 import { resolveVideoTimeline, type VideoSceneRange } from "../protocol/timeline.js";
 
 const SCENE_TRANSITION_SECONDS = 0.3;
+/**
+ * How long before a cut the next scene is mounted when it carries its own
+ * backdrop.
+ *
+ * The blend above is a design decision — 0.3s of cross-fade. Mounting was
+ * accidentally the same number, which gave a <video> 300ms to attach a
+ * source, read metadata, decode a frame and start playing. It cannot, so the
+ * scene arrived as a bare gradient and popped to its picture a beat later.
+ * Warming the bytes ahead of time never fixed that: cached bytes still have
+ * to be decoded by an element that does not exist yet.
+ *
+ * Mounting early costs nothing visually — the layer stays at opacity 0 until
+ * the blend starts, so every rendered frame is identical — and the mounted
+ * element is keyed by scene id, so React hands the very same DOM node (and
+ * its decoded video) to the active layer at the cut instead of building a
+ * fresh one.
+ */
+const MEDIA_PREROLL_SECONDS = 1.2;
 const CONTIGUITY_ULP_FACTOR = 4;
 
 function clamp01(value: number): number {
@@ -37,6 +55,12 @@ function brandBackground(config: Video): string {
 function brandBackgroundFallback(config: Video): string {
   const background = config.style.brand.background;
   return background.type === "solid" ? background.color : background.colors[0];
+}
+
+/** True when the scene paints a photo or video rather than the brand gradient. */
+function sceneHasBackdrop(range: VideoSceneRange): boolean {
+  return String(range.scene.variables.mediaType || "auto") !== "gradient" &&
+    String(range.scene.variables.mediaUrl || "").trim() !== "";
 }
 
 function sceneBackgroundChanges(
@@ -215,9 +239,29 @@ export function VideoFrame({
   );
   const blendStart = active.end - blendDuration;
   const blendEnd = blendStart + blendDuration;
+
+  // Give a backdrop that has to decode a real head start, whether or not the
+  // pair also qualifies for a cross-fade: an abrupt cut to an undecoded video
+  // looks worse than a blended one, not better.
+  // Only a backdrop the next scene does not already have on screen needs the
+  // head start. Identical media across a cut is already decoded.
+  const prerollsNext = Boolean(
+    contiguousNext &&
+      sceneHasBackdrop(contiguousNext) &&
+      sceneBackgroundChanges(active, contiguousNext),
+  );
+  const prerollDuration = prerollsNext
+    ? Math.min(Math.max(MEDIA_PREROLL_SECONDS, blendDuration), Math.max(0, duration))
+    : blendDuration;
+  const prerollStart = active.end - prerollDuration;
+  const mountingNext = Boolean(
+    contiguousNext && time >= prerollStart && time < blendEnd &&
+      (eligibleNextTransition || prerollsNext),
+  );
   const previewingNext = Boolean(
     eligibleNextTransition && time >= blendStart && time < blendEnd,
   );
+  // Zero until the blend window opens, so every frame before it is unchanged.
   const blendProgress = previewingNext && blendDuration > 0
     ? Math.round(clamp01((time - blendStart) / blendDuration) * 1_000_000) / 1_000_000
     : 0;
@@ -275,7 +319,7 @@ export function VideoFrame({
           }}
         />
         {(
-          previewingNext && contiguousNext && nextTiming
+          mountingNext && contiguousNext
             ? [
             <SceneLayer
               key={active.scene.id}
@@ -287,7 +331,10 @@ export function VideoFrame({
               width={canvas.width}
               height={canvas.height}
               playing={playing}
-              layer="outgoing"
+              // Only a blend makes this scene "outgoing". During a preroll it
+              // is still the scene on screen, fully opaque and interactive —
+              // the layer beside it is invisible and only there to decode.
+              layer={previewingNext ? "outgoing" : "active"}
               opacity={1 - blendProgress}
               interactive
               zIndex={1}
