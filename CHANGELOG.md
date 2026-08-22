@@ -4,6 +4,17 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
+- Keeps a soundtrack audible on iPhone Safari when its audio context cannot be
+  unlocked. Routing a media element into a context that never reaches
+  `running` does not fade it, it silences it, so playback now stays on the
+  element unless the context is confirmed running.
+- Actually preloads scene backdrops. The warm elements were unreferenced the
+  moment they were created, so a browser was free to collect them and cancel
+  the request mid-flight; they are now held until they finish. Video streams
+  are warmed too, not just their posters, which is what left a gradient
+  flashing between two consecutive media scenes. One video warms at a time and
+  is released as soon as its first frame lands.
+
 ## 0.3.2
 
 - Rebuilds text legibility over photo and video backdrops. Scrims now ramp off
