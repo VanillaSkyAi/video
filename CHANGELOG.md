@@ -4,6 +4,8 @@ VanillaSky follows semantic versioning. This changelog begins with the 0.1 beta.
 
 ## Unreleased
 
+## 0.3.3
+
 - Keeps a soundtrack audible on iPhone Safari when its audio context cannot be
   unlocked. Routing a media element into a context that never reaches
   `running` does not fade it, it silences it, so playback now stays on the

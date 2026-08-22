@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.42",
-    "@vanillaskyai/video": "0.3.2",
+    "@vanillaskyai/video": "0.3.3",
     "ai": "^7.0.66",
     "next": "16.3.1",
     "react": "19.2.8",
