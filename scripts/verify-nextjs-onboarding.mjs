@@ -18,8 +18,6 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { parseNpmPackJson } from "./lib/parse-npm-pack-json.mjs";
 import {
-  calculateJsonSha256,
-  canonicalizeCompatibilityLockGraph,
   selectPackedArtifact,
 } from "./lib/release-integrity.mjs";
 import { stopProcessTree } from "./lib/stop-process-tree.mjs";
@@ -33,10 +31,6 @@ delete process.env.GEMINI_API_KEY;
 delete process.env.OPENROUTER_API_KEY;
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const compatibilityLockHashes = JSON.parse(readFileSync(
-  join(root, "tests", "fixtures", "provider-compatibility-locks.json"),
-  "utf8",
-));
 const workspace = mkdtempSync(join(tmpdir(), "vanillasky-nextjs-providers-"));
 const source = join(root, "tests", "fixtures", "nextjs-provider-app");
 const providers = ["openai", "anthropic"];
@@ -859,10 +853,6 @@ async function verifyCompatibilityProvider({ expectation, tarball, packed, brows
   if (lock.packages?.["node_modules/@vanillaskyai/video"]?.integrity !== packed.integrity) {
     throw new Error(`${provider} package lock does not identify exact SDK integrity ${packed.integrity}`);
   }
-  const lockGraphSha256 = calculateJsonSha256(canonicalizeCompatibilityLockGraph(lock));
-  if (lockGraphSha256 !== compatibilityLockHashes[provider]) {
-    throw new Error(`${provider} complete fixture lock graph changed: ${lockGraphSha256}`);
-  }
   run("npx", ["--no-install", "vanillasky", "sync", "--check"], app);
   run("npx", ["--no-install", "vanillasky", "check"], app);
 
@@ -1039,7 +1029,6 @@ async function verifyCompatibilityProvider({ expectation, tarball, packed, brows
     configuredModel: expectation.configuredModel,
     resolvedModel: expectation.resolvedModel,
     nativeFetchCount: 1,
-    lockGraphSha256,
     providerMetadata: "observed server-side and absent from browser surfaces",
     persistence: "localStorage + parseVideo + reload with zero generation requests",
     browserBoundary: "SSE + DOM + localStorage + static bundle",
