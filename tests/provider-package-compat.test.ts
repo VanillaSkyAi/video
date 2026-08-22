@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -31,15 +31,15 @@ describe("packed provider package compatibility", () => {
     expect(manifest.peerDependencies).not.toHaveProperty("ai");
   });
 
-  it("keeps Google and OpenRouter fixture-only and compares their complete lock graphs", () => {
-    const fixturePath = resolve(root, "tests", "fixtures", "provider-compatibility-locks.json");
-    expect(existsSync(fixturePath)).toBe(true);
+  it("keeps Google and OpenRouter fixture-only and pins their exact package identity", () => {
     expect(verifier).toContain("fixtureOnly: true");
-    expect(verifier).toContain("canonicalizeCompatibilityLockGraph");
-    expect(verifier).toContain("lockGraphSha256");
-    expect(verifier).toContain("provider-compatibility-locks.json");
     expect(verifier).toContain("expectation.fixtureOnly !== true");
     expect(verifier).toContain('mode: "fixture-only"');
+    // Version and integrity are what actually bind these fixtures to a known
+    // artifact. The whole-tree fingerprint that used to sit alongside them
+    // could only report that packages nothing here pins had moved.
+    expect(verifier).toContain("assertLockedPackage(lock, expectation.packageName, expectation.version, expectation.integrity, provider)");
+    expect(verifier).toContain('assertLockedPackage(lock, "ai", aiVersion, aiIntegrity, provider)');
   });
 
   it("uses the declared npm CLI in every parallel CI job", () => {

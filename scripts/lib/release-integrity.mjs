@@ -173,20 +173,6 @@ export function assertDistTagTransitionCoherent(distTags, candidate) {
   return assertDistTagsCoherent(prospectiveTags, candidate);
 }
 
-export function canonicalizeCompatibilityLockGraph(lock, sdkPackageName = "@vanillaskyai/video") {
-  const graph = structuredClone(lock);
-  if (graph.packages?.[""]?.dependencies) {
-    delete graph.packages[""].dependencies[sdkPackageName];
-  }
-  if (graph.packages) delete graph.packages[`node_modules/${sdkPackageName}`];
-  if (graph.dependencies) delete graph.dependencies[sdkPackageName];
-  return canonicalize(graph);
-}
-
-export function calculateJsonSha256(value) {
-  return createHash("sha256").update(JSON.stringify(canonicalize(value))).digest("hex");
-}
-
 export async function waitForRegistryIntegrity({
   expectedIntegrity,
   fetchIntegrity,
